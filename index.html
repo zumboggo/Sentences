@@ -2,88 +2,76 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Custom Sentence Practice</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sentence Drill — Import</title>
 
-  <!-- optional nicer font (requires internet) -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-  <link rel="manifest" href="manifest.webmanifest" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container" style="max-width:780px;margin:2rem auto;padding:1rem;">
-    <header>
-      <h1>Custom Sentence Practice</h1>
+  <main class="wrap">
+    <header class="header">
+      <h1 class="title">Sentence Drill</h1>
+      <p class="subtitle">Import a CSV to begin</p>
     </header>
 
-    <section id="import-section" class="card" style="padding:1rem;">
-      <h2>Upload CSV</h2>
-
-      <label class="sr-only" for="csvFile">CSV file</label>
+    <section class="card">
+      <label for="csvFile" class="label">Choose CSV</label>
       <input type="file" id="csvFile" accept=".csv,text/csv" />
-
-      <p class="muted" style="margin-top:.5rem">
-        Upload a csv file with Chinese sentences in the first column and English translations in the second column
-      </p>
+      <p class="muted">CSV with <strong>Chinese</strong> in column 1 and <strong>English</strong> in column 2, or headers “Chinese, English”.</p>
     </section>
-  </div>
+  </main>
 
   <script>
-    (function(){
+    (function () {
       const input = document.getElementById('csvFile');
 
-      function parseCSV(text){
+      function parseCSV(text) {
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if(!lines.length) return [];
+        if (!lines.length) return [];
 
-        // Simple CSV split supporting quoted fields (basic)
         const parseLine = (line) => {
-          const result = [];
-          let cur = '';
-          let inQuotes = false;
+          const out = [];
+          let cur = '', inQuotes = false;
           for (let i = 0; i < line.length; i++) {
             const ch = line[i];
-            if (ch === '"' ) { inQuotes = !inQuotes; continue; }
-            if (ch === ',' && !inQuotes) { result.push(cur); cur = ''; continue; }
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { out.push(cur); cur = ''; continue; }
             cur += ch;
           }
-          result.push(cur);
-          return result.map(s => s.trim());
+          out.push(cur);
+          return out.map(s => s.trim());
         };
 
         const first = parseLine(lines[0]);
-        let rows = [];
-        // detect header
-        const headerNames = first.map(h => h.toLowerCase());
-        const hasHeader = headerNames.includes('chinese') && headerNames.includes('english');
+        const header = first.map(h => h.toLowerCase());
+        const hasHeader = header.includes('chinese') && header.includes('english');
+
+        const rows = [];
         if (hasHeader) {
-          const chIdx = headerNames.indexOf('chinese');
-          const enIdx = headerNames.indexOf('english');
-          for (let i = 1; i < lines.length; i++){
+          const chIdx = header.indexOf('chinese');
+          const enIdx = header.indexOf('english');
+          for (let i = 1; i < lines.length; i++) {
             const cols = parseLine(lines[i]);
             if (!cols.length) continue;
-            rows.push({
-              chinese: cols[chIdx] || '',
-              english: cols[enIdx] || ''
-            });
+            rows.push({ chinese: cols[chIdx] || '', english: cols[enIdx] || '' });
           }
         } else {
-          // assume two columns: chinese, english
-          for (let i = 0; i < lines.length; i++){
+          for (let i = 0; i < lines.length; i++) {
             const cols = parseLine(lines[i]);
             if (cols.length < 2) continue;
             rows.push({ chinese: cols[0], english: cols[1] });
           }
         }
-        return rows;
+        return rows.filter(r => r.chinese);
       }
 
       input.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
+
         const reader = new FileReader();
-        reader.onload = function(evt){
+        reader.onload = (evt) => {
           try {
             const text = evt.target.result;
             const sentences = parseCSV(text);
