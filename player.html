@@ -1,467 +1,257 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Sentence Drill — Player</title>
-  <style>
-    :root { --bg:#fff; --fg:#111; --muted:#666; }
-    /* sky-blue gradient background */
-    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; padding:1rem; background: linear-gradient(180deg,#bfe9ff 0%,#9fdfff 50%,#8bd3ff 100%); color:var(--fg); }
-    header { margin-bottom:1rem; }
-    .controls { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
-    .big { font-size: clamp(2rem, 8vw, 6rem); line-height:1.05; font-weight:600; text-align:center; margin: .5rem 0; }
-    .small { font-size: clamp(1rem, 3vw, 2rem); text-align:center; color:var(--muted); }
-    .settings { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
-    label { font-size:.9rem; color:var(--muted); }
-    .btn { padding:.5rem .8rem; border:1px solid #ccc; background:#f8f8f8; cursor:pointer; border-radius:6px; }
-    .btn.primary { background:#0366d6; color:#fff; border-color:#0366d6; }
-    /* ensure english appears darker (closer to black) */
-    #english { color: var(--fg); }
-    #progressCounter { margin-left:0.75rem; color:#222; font-weight:600; }
 
-    /* spacing to focus on sentences */
-    .sentence-wrap { padding: 3.5rem 1rem; margin: 1rem 0 1.75rem; }
-
-    /* confetti */
-    #confetti { position: fixed; pointer-events: none; left:0; top:0; width:100%; height:0; overflow:visible; z-index:9999; }
-    .confetti-piece {
-      position: absolute;
-      width: 10px;
-      height: 16px;
-      opacity: 0.95;
-      transform-origin: center;
-      will-change: transform, opacity;
-      animation: confetti-fall 1200ms linear forwards;
-    }
-    @keyframes confetti-fall {
-      0% { transform: translateY(-10vh) rotate(0deg) scale(1); opacity:1; }
-      100% { transform: translateY(110vh) rotate(720deg) scale(0.9); opacity:0; }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <header>
-    <h1>Sentence Drill</h1>
-  </header>
+  <main class="wrap">
+    <header class="header">
+      <h1 class="title">Sentence Drill</h1>
+      <p class="muted">Pick a voice and options, then start.</p>
+    </header>
 
-  <!-- add id so we can hide all settings at once during study -->
-  <div id="settings" class="settings">
-    <label for="voiceSelect">Voice</label>
-    <select id="voiceSelect"></select>
+    <!-- OPTIONS -->
+    <section id="options" class="card">
+      <div class="field">
+        <div class="row between">
+          <label for="voiceSelect" class="label">Voice</label>
+          <button id="refreshVoices" class="btn xs">Refresh voices</button>
+        </div>
+        <select id="voiceSelect" class="input"></select>
+        <p class="muted" id="voiceHint">Voices are pulled from your browser/OS (Edge, Chrome, macOS, Windows, etc.).</p>
+      </div>
 
-    <label for="sourceLang">Source</label>
-    <select id="sourceLang">
-      <option value="zh-CN" selected>zh-CN</option>
-      <option value="zh-TW">zh-TW</option>
-    </select>
+      <div class="field">
+        <label for="rate" class="label">Rate <span id="rateValue" class="mono badge">1.00</span></label>
+        <input id="rate" class="range" type="range" min="0.50" max="1.50" step="0.01" value="1.00"/>
+        <p class="muted">0.50 (50% slower) ← normal 1.00 → 1.50 (50% faster)</p>
+      </div>
 
-    <label for="targetLang">Target</label>
-    <select id="targetLang">
-      <option value="en-US" selected>en-US</option>
-      <option value="en-GB">en-GB</option>
-    </select>
+      <div class="row gap">
+        <div class="field grow">
+          <label for="setSize" class="label">Sentences per set</label>
+          <select id="setSize" class="input">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </div>
 
-    <label for="rate">Rate</label>
-    <input id="rate" type="range" min="0.5" max="2" step="0.05" value="0.85" />
-    <span id="rateValue">1.00</span>
+        <div class="field grow">
+          <label for="startPoint" class="label">Start point (first sentence of each set)</label>
+          <select id="startPoint" class="input"></select>
+        </div>
 
-    <!-- New minimal controls -->
-    <label for="sets">Sets</label>
-    <input id="sets" type="number" min="1" value="4" style="width:4rem" />
+        <div class="field grow">
+          <label for="repetitions" class="label">Repetitions per sentence</label>
+          <select id="repetitions" class="input">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+      </div>
 
-    <label for="groupSize">Group Size</label>
-    <input id="groupSize" type="number" min="1" value="5" style="width:4rem" />
+      <div class="field row gap">
+        <label class="toggle">
+          <input type="checkbox" id="randomize">
+          <span>Randomize (within session)</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="autoAdvance" checked>
+          <span>Auto-Advance (don’t stop after each set)</span>
+        </label>
+      </div>
 
-    <label for="shadow" title="Pause before English so you can recall and speak aloud">Shadow</label>
-    <input id="shadow" type="checkbox" />
+      <div class="row gap">
+        <button id="studyBtn" class="btn primary">Study</button>
+        <button id="backBtn" class="btn">Back to Import</button>
+      </div>
+    </section>
 
-    <label for="shadowDuration" title="Pause duration in milliseconds">Shadow ms</label>
-    <input id="shadowDuration" type="number" min="0" step="100" value="1500" style="width:5rem" />
+    <!-- STUDY CONTROLS -->
+    <section id="studyControls" class="card" style="display:none;">
+      <div class="row gap">
+        <button id="pauseBtn" class="btn">Pause</button>
+        <button id="stopBtn" class="btn danger">Stop</button>
+      </div>
+      <p class="muted mono" id="progress">Ready…</p>
+    </section>
 
-    <label for="randomize" title="Randomize order within the study group">Randomize</label>
-    <input id="randomize" type="checkbox" checked />
-
-    <label for="autoAdvance" title="Automatically advance to the next group after finishing">Auto-advance</label>
-    <input id="autoAdvance" type="checkbox" />
-  </div>
-
-  <!-- sentence-wrap adds vertical breathing space above/below the sentences -->
-  <div class="sentence-wrap" style="text-align:center;">
-    <div id="chinese" class="big">—</div>
-    <div id="english" class="big" style="font-weight:400;">—</div>
-  </div>
-
-  <!-- add id so we can hide most controls during study; stop button will be kept visible when hiding -->
-  <div id="controls" class="controls" style="justify-content:center; margin-top:1rem;">
-    <button id="playBtn" class="btn primary">Play</button>
-    <button id="nextBtn" class="btn">Next</button>
-    <button id="prevBtn" class="btn">Prev</button>
-    <button id="stopBtn" class="btn">Stop</button>
-
-    <!-- Study and Generate MP3 buttons side-by-side -->
-    <button id="studyBtn" class="btn">Study</button>
-    <button id="generateBtn" class="btn">Generate mp3</button>
-
-    <button id="backImport" class="btn">Back to Import</button>
-    <span id="progressCounter" hidden>0 / 0</span>
-  </div>
-
-  <div id="confetti" aria-hidden="true"></div>
+    <!-- CURRENT SENTENCE -->
+    <section id="nowPlaying" class="card big" style="display:none;">
+      <div class="now">
+        <div id="nowChinese" class="now-cn"></div>
+        <div id="nowEnglish" class="now-en"></div>
+      </div>
+    </section>
+  </main>
 
   <script>
-    // load sentences from sessionStorage
-    const sentencesRaw = sessionStorage.getItem('sentences');
-    let sentences = [];
-    try { sentences = sentencesRaw ? JSON.parse(sentencesRaw) : []; } catch(e){ sentences = []; }
-    if (!sentences || !sentences.length) {
-      document.getElementById('chinese').textContent = 'No sentences loaded.';
-      document.getElementById('english').textContent = '';
-    }
-
-    // UI refs (extended)
-    const chEl = document.getElementById('chinese');
-    const enEl = document.getElementById('english');
-    const playBtn = document.getElementById('playBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const prevBtn = document.getElementById('prevBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const studyBtn = document.getElementById('studyBtn');
-    const backBtn = document.getElementById('backImport');
-    const rateEl = document.getElementById('rate');
-    const rateValue = document.getElementById('rateValue');
-    const voiceSelect = document.getElementById('voiceSelect');
-    const sourceLangEl = document.getElementById('sourceLang');
-    const targetLangEl = document.getElementById('targetLang');
-    const shadowEl = document.getElementById('shadow');
-    const shadowDurationEl = document.getElementById('shadowDuration');
-    const setsEl = document.getElementById('sets');
-    const groupSizeEl = document.getElementById('groupSize');
-    const randomizeEl = document.getElementById('randomize');
-    const autoAdvanceEl = document.getElementById('autoAdvance');
-    const progressCounter = document.getElementById('progressCounter');
-
-    // elements to hide/show during study
-    const settingsEl = document.getElementById('settings');
-    const controlsEl = document.getElementById('controls');
-
-    let idx = 0;
-    function show(i){
-      if (!sentences.length) return;
-      idx = (i + sentences.length) % sentences.length;
-      chEl.textContent = sentences[idx].chinese || '';
-      enEl.textContent = sentences[idx].english || '';
-    }
-    show(0);
-
-    // speech synthesis helpers (refactored to promises)
-    let synth = window.speechSynthesis;
-    let voices = [];
-    function populateVoices(){
-      voices = synth.getVoices();
-      voiceSelect.innerHTML = '';
-      voices.forEach((v, i) => {
-        const opt = document.createElement('option');
-        opt.value = v.name;
-        opt.textContent = `${v.name} — ${v.lang}`;
-        voiceSelect.appendChild(opt);
-      });
-
-      // Try to auto-select Microsoft "Huihui" if available, otherwise keep first voice
-      const hui = voices.find(v => v.name && v.name.toLowerCase().includes('huihui'));
-      if (hui) {
-        voiceSelect.value = hui.name;
-      } else if (voiceSelect.options.length) {
-        voiceSelect.selectedIndex = 0;
+    (function () {
+      const dataRaw = sessionStorage.getItem('sentences');
+      let SENTENCES = [];
+      try { SENTENCES = JSON.parse(dataRaw || '[]') || []; } catch {}
+      if (!SENTENCES.length) {
+        alert('No sentences loaded. Please import a CSV.');
+        window.location.href = 'index.html';
+        return;
       }
-    }
-    populateVoices();
-    if (speechSynthesis.onvoiceschanged !== undefined) {
+
+      // elements
+      const options = document.getElementById('options');
+      const studyControls = document.getElementById('studyControls');
+      const progress = document.getElementById('progress');
+      const voiceSelect = document.getElementById('voiceSelect');
+      const refreshVoicesBtn = document.getElementById('refreshVoices');
+      const rateEl = document.getElementById('rate');
+      const rateValue = document.getElementById('rateValue');
+      const setSizeEl = document.getElementById('setSize');
+      const startPointEl = document.getElementById('startPoint');
+      const repetitionsEl = document.getElementById('repetitions');
+      const randomizeEl = document.getElementById('randomize');
+      const autoAdvanceEl = document.getElementById('autoAdvance');
+      const studyBtn = document.getElementById('studyBtn');
+      const backBtn = document.getElementById('backBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const nowPlaying = document.getElementById('nowPlaying');
+      const nowChinese = document.getElementById('nowChinese');
+      const nowEnglish = document.getElementById('nowEnglish');
+
+      const synth = window.speechSynthesis;
+      let voices = [];
+      function populateVoices() {
+        voices = synth.getVoices();
+        voiceSelect.innerHTML = '';
+        voices.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.name;
+          opt.textContent = `${v.name} (${v.lang})${v.default ? ' — default' : ''}`;
+          voiceSelect.appendChild(opt);
+        });
+        const zh = voices.find(v => /^zh(-|_)?/i.test(v.lang));
+        if (zh) voiceSelect.value = zh.name;
+      }
       speechSynthesis.onvoiceschanged = populateVoices;
-    }
+      populateVoices();
+      refreshVoicesBtn.addEventListener('click', populateVoices);
 
-    function speakPromise(text, lang){
-      return new Promise(resolve => {
-        if (!text) { resolve(); return; }
+      function showOptionsView() {
+        isStudying = false; paused = false;
+        options.style.display = ''; studyControls.style.display = 'none'; nowPlaying.style.display = 'none';
+      }
+      function showStudyView() {
+        options.style.display = 'none'; studyControls.style.display = ''; nowPlaying.style.display = '';
+      }
+      function currentVoice() {
+        return voices.find(v => v.name === voiceSelect.value) || null;
+      }
+      function speakText(text, onend) {
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = lang || '';
-        const sel = voiceSelect.value;
-        if (sel) {
-          const v = voices.find(x => x.name === sel);
-          if (v) u.voice = v;
-        }
-        u.rate = parseFloat(rateEl.value) || 1;
-        u.onend = () => resolve();
+        const v = currentVoice(); if (v) u.voice = v;
+        u.rate = parseFloat(rateEl.value || '1');
+        u.onend = onend; u.onerror = onend;
         synth.speak(u);
-      });
-    }
-
-    function delay(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-    let isPlaying = false;
-
-    function setControlsEnabled(enabled){
-      // keep stopBtn enabled when enabled===false so user can stop
-      const list = [playBtn, nextBtn, prevBtn, studyBtn, backBtn, voiceSelect, sourceLangEl, targetLangEl, setsEl, groupSizeEl, randomizeEl, rateEl, shadowEl, shadowDurationEl];
-      list.forEach(el => {
-        try { el.disabled = !enabled; } catch(e){}
-      });
-      // stop button enabled when playing (enabled=false) and when enabled=true
-      stopBtn.disabled = enabled;
-      progressCounter.hidden = enabled;
-      if (enabled) progressCounter.textContent = '';
-    }
-
-    // hide settings and most controls, leave Stop visible
-    function hideOptionsForStudy(){
-      if (settingsEl) settingsEl.style.display = 'none';
-      if (controlsEl) {
-        Array.from(controlsEl.children).forEach(child => {
-          if (child === stopBtn || child.id === 'progressCounter') {
-            // keep stop and progress visible
-            child.style.display = '';
-          } else {
-            child.style.display = 'none';
-          }
-        });
       }
-    }
 
-    function showOptionsForStudy(){
-      if (settingsEl) settingsEl.style.display = '';
-      if (controlsEl) {
-        Array.from(controlsEl.children).forEach(child => {
-          child.style.display = '';
-        });
-      }
-    }
-
-    async function playSentenceOnce(s){
-      if (!isPlaying) return;
-      await speakPromise(s.chinese || '', sourceLangEl.value);
-      if (!isPlaying) return;
-      if (shadowEl.checked) {
-        const ms = Math.max(0, parseInt(shadowDurationEl.value) || 1500);
-        await delay(ms);
-      }
-      if (!isPlaying) return;
-      await speakPromise(s.english || '', targetLangEl.value);
-    }
-
-    async function playCurrent(){
-      if (!sentences.length) return;
-      if (isPlaying) return;
-      isPlaying = true;
-      setControlsEnabled(false);
-      const s = sentences[idx];
-      const sets = Math.max(1, parseInt(setsEl.value) || 1);
-      try {
-        synth.cancel();
-        for (let set = 0; set < sets; set++){
-          for (let t = 0; t < baseRepeat; t++){
-            if (!isPlaying) break;
-            await playSentenceOnce(s);
-            if (!isPlaying) break;
-            if (t < baseRepeat - 1) await delay(300);
-          }
-          if (!isPlaying) break;
-          // small pause between sets
-          if (set < sets - 1) await delay(500);
-        }
-      } finally {
-        isPlaying = false;
-        setControlsEnabled(true);
-      }
-    }
-
-    // Fisher-Yates shuffle
-    function shuffle(array){
-      for (let i = array.length - 1; i > 0; i--){
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    // Build a single-round sequence based on current settings:
-    function buildStudySequenceForOneRound(){
-      const groupSize = Math.max(1, Math.min(sentences.length, parseInt(groupSizeEl.value) || 1));
-      const sets = Math.max(1, parseInt(setsEl.value) || 1);
-      const startIdx = idx;
-
-      // select group indices
-      let groupIndices = [];
-      if (randomizeEl.checked) {
-        const allIndices = [...Array(sentences.length).keys()];
-        shuffle(allIndices);
-        groupIndices = allIndices.slice(0, groupSize);
-      } else {
-        for (let i = 0; i < groupSize; i++){
-          groupIndices.push( (startIdx + i) % sentences.length );
+      function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s; }
+      function buildStartPoints() {
+        const size = parseInt(setSizeEl.value, 10);
+        startPointEl.innerHTML = '';
+        for (let i = 0; i < SENTENCES.length; i += size) {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = `${i + 1}: ${truncate(SENTENCES[i]?.chinese || '', 18)}`;
+          startPointEl.appendChild(opt);
         }
       }
+      setSizeEl.addEventListener('change', buildStartPoints);
+      buildStartPoints();
 
-      // build sets: each set is an array where each index appears baseRepeat times (in groupIndices order)
-      let setsArray = [];
-      for (let s = 0; s < sets; s++){
-        const oneSet = [];
-        groupIndices.forEach(i => {
-          for (let r = 0; r < baseRepeat; r++) oneSet.push(i);
-        });
-        setsArray.push(oneSet);
+      let isStudying = false, paused = false;
+
+      function makeOrderSlice(startIdx) {
+        const seq = Array.from({ length: SENTENCES.length - startIdx }, (_, k) => startIdx + k);
+        if (randomizeEl.checked) {
+          for (let i = seq.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [seq[i], seq[j]] = [seq[j], seq[i]];
+          }
+        }
+        return seq;
       }
 
-      // if randomize is checked, shuffle the order of sets (so the sets play in random order)
-      if (randomizeEl.checked) shuffle(setsArray);
-
-      // flatten setsArray into a single sequence
-      const seq = [].concat(...setsArray);
-      return { seq, groupIndices, startIdx };
-    }
-
-    async function studyGroup(){
-      if (!sentences.length) return;
-      if (isPlaying) return;
-      isPlaying = true;
-      setControlsEnabled(false);
-      hideOptionsForStudy();
-      synth.cancel();
-      try {
-        while (isPlaying) {
-          const { seq, startIdx, groupIndices } = buildStudySequenceForOneRound();
-
-          progressCounter.hidden = false;
-          for (let k = 0; k < seq.length; k++){
-            if (!isPlaying) break;
-            const sIdx = seq[k];
-            show(sIdx);
-            progressCounter.textContent = `${k+1} / ${seq.length}`;
-            await playSentenceOnce(sentences[sIdx]);
-            if (!isPlaying) break;
-            await delay(200);
-          }
-
-          // round finished
-          if (isPlaying) {
-            showConfetti(48);
-            playFireworksSound();
-            await delay(600);
-          }
-
-          // advance behavior and auto-advance handling
-          if (!autoAdvanceEl || !autoAdvanceEl.checked) {
-            if (!randomizeEl.checked) show(startIdx + groupIndices.length);
-            showOptionsForStudy();
-            break;
-          } else {
-            // if not randomize, advance idx to after this group for next round
-            if (!randomizeEl.checked) {
-              idx = (startIdx + groupIndices.length) % sentences.length;
-            }
-            await delay(300);
-            // continue to next auto-advanced round (options remain hidden)
-          }
-        }
-      } finally {
-        isPlaying = false;
-        setControlsEnabled(true);
-        if (!autoAdvanceEl || !autoAdvanceEl.checked) showOptionsForStudy();
-      }
-    }
-
-    // Generate mp3 (or fallback) by recording tab audio while playing one study round
-    async function generateRecording(){
-      if (!sentences.length) return;
-      if (isPlaying) return;
-
-      // Build the sequence for one round (do not auto-advance here)
-      const { seq, startIdx, groupIndices } = buildStudySequenceForOneRound();
-      // Request tab audio via getDisplayMedia (user must allow "share this tab" with audio)
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
-        // pick preferred mimeType
-        let mime = 'audio/mpeg';
-        if (!MediaRecorder.isTypeSupported(mime)) {
-          mime = 'audio/webm';
-          if (!MediaRecorder.isTypeSupported(mime)) mime = '';
-        }
-        const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-        const chunks = [];
-        recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-        recorder.start();
-
-        // play the sequence (use same playSentenceOnce which uses speechSynthesis)
-        isPlaying = true;
-        setControlsEnabled(false);
-        hideOptionsForStudy();
-        synth.cancel();
-        progressCounter.hidden = false;
-        for (let k = 0; k < seq.length; k++){
-          if (!isPlaying) break;
-          const sIdx = seq[k];
-          show(sIdx);
-          progressCounter.textContent = `${k+1} / ${seq.length}`;
-          await playSentenceOnce(sentences[sIdx]);
-          if (!isPlaying) break;
-          await delay(200);
-        }
-
-        // stop recorder after a short tail to ensure last speech recorded
-        await delay(500);
-        recorder.stop();
-
-        // stop capture
-        stream.getTracks().forEach(t => t.stop());
-
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: mime || 'application/octet-stream' });
-          const url = URL.createObjectURL(blob);
-          // choose extension based on mime
-          const ext = mime === 'audio/mpeg' ? 'mp3' : (mime === 'audio/webm' ? 'webm' : 'bin');
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `study.${ext}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
+      function speakSentenceBoth(row, reps, cb) {
+        let remaining = reps;
+        const cycle = () => {
+          if (remaining <= 0) { cb && cb(); return; }
+          // Chinese then English
+          speakText(row.chinese || '', () => {
+            speakText(row.english || '', () => {
+              remaining--; if (!isStudying || paused) { cb && cb(); return; }
+              if (remaining > 0) cycle(); else cb && cb();
+            });
+          });
         };
-
-        // restore UI
-        isPlaying = false;
-        setControlsEnabled(true);
-        showOptionsForStudy();
-      } catch (err) {
-        console.error('Recording failed or was cancelled', err);
-        alert('Recording cancelled or not supported. You may need to allow tab audio capture.');
-        isPlaying = false;
-        setControlsEnabled(true);
-        showOptionsForStudy();
+        cycle();
       }
-    }
 
-    // controls wiring (add generateBtn)
-    playBtn.addEventListener('click', () => { playCurrent(); });
-    nextBtn.addEventListener('click', () => { show(idx+1); });
-    prevBtn.addEventListener('click', () => { show(idx-1); });
-    stopBtn.addEventListener('click', () => {
-      synth.cancel();
-      isPlaying = false;
-      setControlsEnabled(true);
-      // ensure options reappear when user stops
-      showOptionsForStudy();
-    });
-    studyBtn.addEventListener('click', () => { studyGroup(); });
-    backBtn.addEventListener('click', () => { window.location.href = 'index.html'; });
-    const generateBtn = document.getElementById('generateBtn');
-    generateBtn.addEventListener('click', () => { generateRecording(); });
+      function studySet(order, cursor, size, reps, done) {
+        const end = Math.min(cursor + size, order.length);
+        let i = cursor;
+        const next = () => {
+          if (!isStudying) return;
+          if (i >= end) { done && done(end); return; }
+          const row = SENTENCES[order[i]];
+          nowChinese.textContent = row.chinese || '';
+          nowEnglish.textContent = row.english || '';
+          progress.textContent = `Sentence ${order[i] + 1} / ${SENTENCES.length}`;
+          speakSentenceBoth(row, reps, () => { if (!isStudying) return; i++; if (!paused) next(); });
+        };
+        next();
+      }
 
-    rateEl.addEventListener('input', () => { rateValue.textContent = Number(rateEl.value).toFixed(2); });
-    // set initial displayed rate
-    rateValue.textContent = Number(rateEl.value || 0.85).toFixed(2);
+      function startStudy() {
+        const startIdx = parseInt(startPointEl.value, 10) || 0;
+        const size = parseInt(setSizeEl.value, 10) || 5;
+        const reps = parseInt(repetitionsEl.value, 10) || 3;
+        let order = makeOrderSlice(startIdx);
+        showStudyView(); isStudying = true; paused = false;
+        const doSet = (cursor) => {
+          if (cursor >= order.length) { showOptionsView(); return; }
+          studySet(order, cursor, size, reps, (newCursor) => {
+            if (autoAdvanceEl.checked) doSet(newCursor);
+            else showOptionsView();
+          });
+        };
+        doSet(0);
+      }
 
-    // initial state
-    setControlsEnabled(true);
+      rateEl.addEventListener('input', () => { rateValue.textContent = Number(rateEl.value).toFixed(2); });
+      rateValue.textContent = Number(rateEl.value).toFixed(2);
+
+      studyBtn.addEventListener('click', startStudy);
+      backBtn.addEventListener('click', () => window.location.href = 'index.html');
+      pauseBtn.addEventListener('click', () => {
+        if (!isStudying) return;
+        if (!paused) { synth.pause(); paused = true; pauseBtn.textContent = 'Resume'; }
+        else { synth.resume(); paused = false; pauseBtn.textContent = 'Pause'; }
+      });
+      stopBtn.addEventListener('click', () => { synth.cancel(); showOptionsView(); });
+
+      showOptionsView();
+    })();
   </script>
 </body>
 </html>
