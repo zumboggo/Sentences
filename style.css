@@ -1,50 +1,125 @@
-/* Lighter, airy azure background and small tweaks to harmonize with Stop button */
+:root {
+  /* Sky blue gradient theme */
+  --bg1: #e6f4ff;
+  --bg2: #cdeaff;
+  --bg3: #b3e1ff;
 
-:root{
-  --bg-a:#e9faff; /* very light azure */
-  --bg-b:#d7f2ff; /* soft azure */
-  --card-bg: rgba(255,255,255,0.06);
-  --card-border: rgba(255,255,255,0.12);
-  --glass-blur: 8px;
-  --text: #08314a;
-  --muted: rgba(8,49,74,0.6);
-  --accent: #60a5fa;
-  --radius: 12px;
-  --max-width: 980px;
+  --panel: #ffffff;
+  --muted: #4f637a;
+  --text: #0b2239;
+  --accent: #1a73e8;
+  --danger: #d93025;
+  --ring: rgba(26,115,232,.25);
+  --radius: 14px;
 }
 
-/* body background */
-html,body {
-  height:100%;
-  margin:0;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  color:var(--text);
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-  background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
-  background-attachment: fixed;
-  font-size: 18px;
-  line-height:1.4;
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  background: linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 40%, var(--bg3) 100%);
+  color: var(--text);
 }
 
-/* keep card appearance but lighter */
+.wrap {
+  max-width: 780px;
+  margin: 3rem auto;
+  padding: 0 1rem 3rem;
+}
+
+.header { margin-bottom: 1.25rem; }
+.title { margin: 0 0 .25rem; font-weight: 800; letter-spacing: -0.02em; }
+.subtitle { margin: 0; color: var(--muted); }
+
 .card {
-  background: rgba(255,255,255,0.85);
-  border: 1px solid rgba(6,34,52,0.06);
+  background: var(--panel);
+  border: 1px solid rgba(11,34,57,0.08);
   border-radius: var(--radius);
-  padding:18px;
-  backdrop-filter: blur(var(--glass-blur));
-  box-shadow: 0 8px 22px rgba(3,20,34,0.08);
-  transition: transform .18s ease, box-shadow .18s ease;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(11,34,57,0.08);
+  margin-bottom: 1rem;
 }
 
-.card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(3,20,34,0.10); }
-
-/* button destructive style for Stop */
-.btn.destructive {
-  background: linear-gradient(180deg, #ff6b6b, #ff4d4d);
-  color: white;
+.field { margin-bottom: .9rem; }
+.label { display: block; margin-bottom: .35rem; font-weight: 600; }
+.input, select.input, .range {
+  width: 100%;
+  padding: .6rem .7rem;
+  background: #f7fbff;
+  color: var(--text);
+  border: 1px solid rgba(11,34,57,0.15);
   border-radius: 10px;
-  padding: 10px 12px;
-  box-shadow: 0 6px 18px rgba(255,77,77,0.12);
+  outline: none;
+}
+.input:focus, .range:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+
+.range { padding: .2rem; }
+
+.row { display: flex; align-items: center; }
+.gap { gap: .6rem; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(11,34,57,0.18);
+  background: #eef6ff;
+  color: var(--text);
+  padding: .55rem .85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn:hover { background: #e3f0ff; }
+.btn:focus { outline: none; box-shadow: 0 0 0 4px var(--ring); }
+.btn.primary { background: linear-gradient(180deg, #e6f0ff, #d9e8ff); border-color: rgba(11,34,57,0.22); }
+.btn.primary:hover { background: linear-gradient(180deg, #dae9ff, #cfe2ff); }
+.btn.danger { background: #ffecec; border-color: rgba(11,34,57,0.18); color: #8a1610; }
+.btn.danger:hover { background: #ffe3e3; }
+.btn.xs { padding: .35rem .6rem; font-size: .9rem; }
+
+.badge {
+  display: inline-block;
+  padding: .15rem .45rem;
+  background: #eef6ff;
+  border: 1px solid rgba(11,34,57,0.15);
+  border-radius: 6px;
+  margin-left: .4rem;
+}
+
+.toggle { display: inline-flex; align-items: center; gap: .45rem; font-weight: 600; }
+.toggle input { transform: scale(1.1); }
+
+.muted { color: var(--muted); margin: .4rem 0 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+.now { display: grid; gap: .35rem; }
+.now-label { color: var(--muted); font-size: .9rem; }
+.now-cn { font-size: 1.25rem; font-weight: 700; line-height: 1.4; }
+.now-en { color: var(--muted); }
+.grow { flex: 1 1 0; min-width: 180px; }
+
+:root {
+  --bg1: #b5d9ff;   /* darker sky blue */
+  --bg2: #89c4ff;
+  --bg3: #5aaaff;
+  /* ... keep the rest */
+}
+
+.now-cn {
+  font-size: 3rem;   /* big Chinese text */
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.now-en {
+  font-size: 2rem;   /* big English text */
+  margin-top: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.card.big {
+  padding: 2rem;
 }
