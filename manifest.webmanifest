@@ -1,9 +1,19 @@
 {
   "name": "Sentence Drill",
   "short_name": "Drill",
+  "description": "Glossika-style sentence drilling PWA for language learning",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
-  "description": "Glossika-style sentence drilling PWA",
-  "icons": []
+  "theme_color": "#1a73e8",
+  "orientation": "portrait",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%231a73e8' rx='100'/%3E%3Cpath fill='%23fff' d='M140 160h232v48H140zm0 88h232v48H140zm0 88h160v48H140z'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
