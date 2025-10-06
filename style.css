@@ -95,8 +95,19 @@ body {
 
 .now { display: grid; gap: .35rem; }
 .now-label { color: var(--muted); font-size: .9rem; }
-.now-cn { font-size: 1.25rem; font-weight: 700; line-height: 1.4; }
-.now-en { color: var(--muted); }
+.now-cn {
+  font-size: 9rem;    /* TRIPLE SIZE */
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.now-en {
+  font-size: 6rem;    /* TRIPLE SIZE */
+  margin-top: 2rem;
+  color: var(--muted);
+  text-align: center;
+}
 .grow { flex: 1 1 0; min-width: 180px; }
 
 :root {
