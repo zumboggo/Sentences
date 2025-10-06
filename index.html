@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#1a73e8"/>
   <title>Sentence Drill — Import</title>
 
+  <link rel="manifest" href="manifest.webmanifest">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,21 +14,38 @@
   <main class="wrap">
     <header class="header">
       <h1 class="title">Sentence Drill</h1>
-      <p class="subtitle">Import a CSV to begin</p>
+      <p class="subtitle">Import a CSV or Excel file to begin</p>
     </header>
 
     <section class="card">
-      <label for="csvFile" class="label">Choose CSV</label>
-      <input type="file" id="csvFile" accept=".csv,text/csv" />
-      <p class="muted">CSV with <strong>Chinese</strong> in column 1 and <strong>English</strong> in column 2, or headers “Chinese, English”.</p>
+      <label for="csvFile" class="label">Choose CSV or Excel File</label>
+      <input type="file" id="csvFile" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+      <p class="muted">Supports CSV and Excel files (.xlsx, .xls) with <strong>Target Language</strong> in column 1 and <strong>Known Language</strong> in column 2. Supported headers: zh/en, chinese/english, target/known, col1/col2.</p>
+      <p class="muted mono" id="debugOutput" style="color: #d93025; margin-top: 1rem;"></p>
     </section>
   </main>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+
     (function () {
       const input = document.getElementById('csvFile');
+      const debugOutput = document.getElementById('debugOutput');
+
+      function log(msg) {
+        console.log(msg);
+        debugOutput.textContent = msg;
+      }
 
       function parseCSV(text) {
+        log('Parsing CSV...');
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         if (!lines.length) return [];
 
@@ -44,50 +63,158 @@
         };
 
         const first = parseLine(lines[0]);
-        const header = first.map(h => h.toLowerCase());
-        const hasHeader = header.includes('chinese') && header.includes('english');
+        const header = first.map(h => h.toLowerCase().trim());
+        const hasTargetHeader = header.includes('chinese') || header.includes('zh') || header.includes('target') || header.includes('col1') || header.includes('column1');
+        const hasKnownHeader = header.includes('english') || header.includes('en') || header.includes('known') || header.includes('col2') || header.includes('column2');
+        const hasHeader = hasTargetHeader && hasKnownHeader;
 
         const rows = [];
         if (hasHeader) {
-          const chIdx = header.indexOf('chinese');
-          const enIdx = header.indexOf('english');
+          log('CSV has headers: ' + header.join(', '));
+          let targetIdx = header.indexOf('chinese');
+          if (targetIdx === -1) targetIdx = header.indexOf('zh');
+          if (targetIdx === -1) targetIdx = header.indexOf('target');
+          if (targetIdx === -1) targetIdx = header.indexOf('col1');
+          if (targetIdx === -1) targetIdx = header.indexOf('column1');
+          
+          let knownIdx = header.indexOf('english');
+          if (knownIdx === -1) knownIdx = header.indexOf('en');
+          if (knownIdx === -1) knownIdx = header.indexOf('known');
+          if (knownIdx === -1) knownIdx = header.indexOf('col2');
+          if (knownIdx === -1) knownIdx = header.indexOf('column2');
+          
+          log(`Using columns: ${targetIdx} (target) and ${knownIdx} (known)`);
+          
           for (let i = 1; i < lines.length; i++) {
             const cols = parseLine(lines[i]);
             if (!cols.length) continue;
-            rows.push({ chinese: cols[chIdx] || '', english: cols[enIdx] || '' });
+            rows.push({ target: cols[targetIdx] || '', known: cols[knownIdx] || '' });
           }
         } else {
+          log('CSV has no headers, using columns 0 and 1');
           for (let i = 0; i < lines.length; i++) {
             const cols = parseLine(lines[i]);
             if (cols.length < 2) continue;
-            rows.push({ chinese: cols[0], english: cols[1] });
+            rows.push({ target: cols[0], known: cols[1] });
           }
         }
-        return rows.filter(r => r.chinese);
+        log(`Parsed ${rows.length} sentences from CSV`);
+        return rows.filter(r => r.target);
+      }
+
+      function parseExcel(data) {
+        log('Parsing Excel file...');
+        
+        if (typeof XLSX === 'undefined') {
+          log('ERROR: XLSX library not loaded!');
+          return [];
+        }
+        
+        const workbook = XLSX.read(data, { type: 'array' });
+        log(`Found ${workbook.SheetNames.length} sheets`);
+        
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        
+        log(`Sheet has ${jsonData.length} rows`);
+        
+        if (!jsonData.length) return [];
+
+        const first = jsonData[0];
+        const header = first.map(h => String(h || '').toLowerCase().trim());
+        const hasTargetHeader = header.includes('chinese') || header.includes('zh') || header.includes('target') || header.includes('col1') || header.includes('column1');
+        const hasKnownHeader = header.includes('english') || header.includes('en') || header.includes('known') || header.includes('col2') || header.includes('column2');
+        const hasHeader = hasTargetHeader && hasKnownHeader;
+
+        const rows = [];
+        if (hasHeader) {
+          log('Excel has headers: ' + header.join(', '));
+          let targetIdx = header.indexOf('chinese');
+          if (targetIdx === -1) targetIdx = header.indexOf('zh');
+          if (targetIdx === -1) targetIdx = header.indexOf('target');
+          if (targetIdx === -1) targetIdx = header.indexOf('col1');
+          if (targetIdx === -1) targetIdx = header.indexOf('column1');
+          
+          let knownIdx = header.indexOf('english');
+          if (knownIdx === -1) knownIdx = header.indexOf('en');
+          if (knownIdx === -1) knownIdx = header.indexOf('known');
+          if (knownIdx === -1) knownIdx = header.indexOf('col2');
+          if (knownIdx === -1) knownIdx = header.indexOf('column2');
+          
+          log(`Using columns: ${targetIdx} (target) and ${knownIdx} (known)`);
+          
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row || !row.length) continue;
+            const target = String(row[targetIdx] || '').trim();
+            const known = String(row[knownIdx] || '').trim();
+            if (target) rows.push({ target, known });
+          }
+        } else {
+          log('Excel has no headers, using columns 0 and 1');
+          for (let i = 0; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row || row.length < 2) continue;
+            const target = String(row[0] || '').trim();
+            const known = String(row[1] || '').trim();
+            if (target) rows.push({ target, known });
+          }
+        }
+        log(`Parsed ${rows.length} sentences from Excel`);
+        return rows;
       }
 
       input.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
 
+        log(`Loading file: ${file.name} (${file.size} bytes)`);
+
         const reader = new FileReader();
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
         reader.onload = (evt) => {
           try {
-            const text = evt.target.result;
-            const sentences = parseCSV(text);
+            let sentences;
+            if (isExcel) {
+              sentences = parseExcel(evt.target.result);
+            } else {
+              sentences = parseCSV(evt.target.result);
+            }
+            
+            log(`Total sentences after filtering: ${sentences.length}`);
+            
             if (!sentences.length) {
-              alert('No valid rows found in CSV.');
+              alert('No valid rows found in file.');
               return;
             }
-            sessionStorage.setItem('sentences', JSON.stringify(sentences));
-            sessionStorage.setItem('sentencesImportedAt', String(Date.now()));
-            window.location.href = 'player.html';
+            
+            log('Saving to localStorage...');
+            localStorage.setItem('sentences', JSON.stringify(sentences));
+            localStorage.setItem('sentencesImportedAt', String(Date.now()));
+            
+            const verify = localStorage.getItem('sentences');
+            log(`Saved successfully. Verification: ${verify ? 'OK' : 'FAILED'}`);
+            
+            setTimeout(() => {
+              window.location.href = 'player.html';
+            }, 500);
           } catch (err) {
             console.error(err);
-            alert('Failed to parse CSV.');
+            log('ERROR: ' + err.message);
+            alert('Failed to parse file: ' + err.message);
           }
         };
-        reader.readAsText(file, 'utf-8');
+
+        reader.onerror = () => {
+          log('ERROR: Failed to read file');
+        };
+
+        if (isExcel) {
+          reader.readAsArrayBuffer(file);
+        } else {
+          reader.readAsText(file, 'utf-8');
+        }
       });
     })();
   </script>
