@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#1a73e8"/>
   <title>Sentence Drill — Player</title>
 
+  <link rel="manifest" href="manifest.webmanifest">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css"/>
 </head>
@@ -15,7 +17,6 @@
       <p class="muted">Pick a voice and options, then start.</p>
     </header>
 
-    <!-- OPTIONS -->
     <section id="options" class="card">
       <div class="field">
         <div class="row between">
@@ -27,9 +28,23 @@
       </div>
 
       <div class="field">
-        <label for="rate" class="label">Rate <span id="rateValue" class="mono badge">1.00</span></label>
-        <input id="rate" class="range" type="range" min="0.50" max="1.50" step="0.01" value="1.00"/>
+        <label for="rate" class="label">Rate <span id="rateValue" class="mono badge">0.80</span></label>
+        <input id="rate" class="range" type="range" min="0.50" max="1.50" step="0.01" value="0.80"/>
         <p class="muted">0.50 (50% slower) ← normal 1.00 → 1.50 (50% faster)</p>
+      </div>
+
+      <div class="field">
+        <label class="label">Listening Mode</label>
+        <div class="row gap">
+          <label class="toggle">
+            <input type="radio" name="listenMode" id="listenBoth" value="both" checked>
+            <span>Both languages</span>
+          </label>
+          <label class="toggle">
+            <input type="radio" name="listenMode" id="listenTarget" value="target">
+            <span>Target language only</span>
+          </label>
+        </div>
       </div>
 
       <div class="row gap">
@@ -68,9 +83,14 @@
           <span>Randomize (within session)</span>
         </label>
         <label class="toggle">
-          <input type="checkbox" id="autoAdvance" checked>
-          <span>Auto-Advance (don’t stop after each set)</span>
+          <input type="checkbox" id="autoAdvance">
+          <span>Auto-Advance (don't stop after each set)</span>
         </label>
+      </div>
+
+      <div class="field" id="progressCard">
+        <p class="muted mono" id="overallProgress">Progress: 0 / 0 sentences completed</p>
+        <button id="resetProgress" class="btn xs danger">Reset Progress</button>
       </div>
 
       <div class="row gap">
@@ -79,36 +99,97 @@
       </div>
     </section>
 
-    <!-- STUDY CONTROLS -->
     <section id="studyControls" class="card" style="display:none;">
       <div class="row gap">
         <button id="pauseBtn" class="btn">Pause</button>
+        <button id="skipBtn" class="btn">Skip ⏭</button>
         <button id="stopBtn" class="btn danger">Stop</button>
       </div>
       <p class="muted mono" id="progress">Ready…</p>
     </section>
 
-    <!-- CURRENT SENTENCE -->
     <section id="nowPlaying" class="card big" style="display:none;">
       <div class="now">
-        <div id="nowChinese" class="now-cn"></div>
-        <div id="nowEnglish" class="now-en"></div>
+        <div class="now-label">Target Language:</div>
+        <div id="nowTarget" class="now-cn"></div>
+        <div class="now-label" style="margin-top: 1rem;">Known Language:</div>
+        <div id="nowKnown" class="now-en"></div>
       </div>
     </section>
   </main>
 
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+
     (function () {
-      const dataRaw = sessionStorage.getItem('sentences');
+      const dataRaw = localStorage.getItem('sentences');
       let SENTENCES = [];
       try { SENTENCES = JSON.parse(dataRaw || '[]') || []; } catch {}
       if (!SENTENCES.length) {
-        alert('No sentences loaded. Please import a CSV.');
+        alert('No sentences loaded. Please import a CSV or Excel file.');
         window.location.href = 'index.html';
         return;
       }
 
-      // elements
+      const PROGRESS_KEY = 'sentenceDrillProgress';
+      let completedSentences = new Set();
+      
+      // Helper function to get target text (backward compatible)
+      function getTarget(row) {
+        return row.target || row.chinese || '';
+      }
+      
+      // Helper function to get known text (backward compatible)
+      function getKnown(row) {
+        return row.known || row.english || '';
+      }
+      
+      function loadProgress() {
+        try {
+          const saved = localStorage.getItem(PROGRESS_KEY);
+          if (saved) {
+            const arr = JSON.parse(saved);
+            completedSentences = new Set(arr);
+          }
+        } catch (e) {
+          console.error('Error loading progress:', e);
+        }
+        updateOverallProgress();
+      }
+
+      function saveProgress() {
+        try {
+          localStorage.setItem(PROGRESS_KEY, JSON.stringify([...completedSentences]));
+        } catch (e) {
+          console.error('Error saving progress:', e);
+        }
+      }
+
+      function markSentenceComplete(index) {
+        completedSentences.add(index);
+        saveProgress();
+        updateOverallProgress();
+      }
+
+      function updateOverallProgress() {
+        const progressEl = document.getElementById('overallProgress');
+        progressEl.textContent = `Progress: ${completedSentences.size} / ${SENTENCES.length} sentences completed`;
+      }
+
+      function resetProgress() {
+        if (confirm('Are you sure you want to reset all progress?')) {
+          completedSentences.clear();
+          saveProgress();
+          updateOverallProgress();
+        }
+      }
+
       const options = document.getElementById('options');
       const studyControls = document.getElementById('studyControls');
       const progress = document.getElementById('progress');
@@ -121,13 +202,17 @@
       const repetitionsEl = document.getElementById('repetitions');
       const randomizeEl = document.getElementById('randomize');
       const autoAdvanceEl = document.getElementById('autoAdvance');
+      const listenBothEl = document.getElementById('listenBoth');
+      const listenTargetEl = document.getElementById('listenTarget');
       const studyBtn = document.getElementById('studyBtn');
       const backBtn = document.getElementById('backBtn');
       const pauseBtn = document.getElementById('pauseBtn');
+      const skipBtn = document.getElementById('skipBtn');
       const stopBtn = document.getElementById('stopBtn');
+      const resetProgressBtn = document.getElementById('resetProgress');
       const nowPlaying = document.getElementById('nowPlaying');
-      const nowChinese = document.getElementById('nowChinese');
-      const nowEnglish = document.getElementById('nowEnglish');
+      const nowTarget = document.getElementById('nowTarget');
+      const nowKnown = document.getElementById('nowKnown');
 
       const synth = window.speechSynthesis;
       let voices = [];
@@ -140,6 +225,7 @@
           opt.textContent = `${v.name} (${v.lang})${v.default ? ' — default' : ''}`;
           voiceSelect.appendChild(opt);
         });
+        // Default to Chinese voice if available
         const zh = voices.find(v => /^zh(-|_)?/i.test(v.lang));
         if (zh) voiceSelect.value = zh.name;
       }
@@ -148,38 +234,51 @@
       refreshVoicesBtn.addEventListener('click', populateVoices);
 
       function showOptionsView() {
-        isStudying = false; paused = false;
-        options.style.display = ''; studyControls.style.display = 'none'; nowPlaying.style.display = 'none';
+        isStudying = false; paused = false; skipping = false;
+        options.style.display = ''; 
+        studyControls.style.display = 'none'; 
+        nowPlaying.style.display = 'none';
       }
+      
       function showStudyView() {
-        options.style.display = 'none'; studyControls.style.display = ''; nowPlaying.style.display = '';
+        options.style.display = 'none'; 
+        studyControls.style.display = ''; 
+        nowPlaying.style.display = '';
       }
+      
       function currentVoice() {
         return voices.find(v => v.name === voiceSelect.value) || null;
       }
+      
       function speakText(text, onend) {
         const u = new SpeechSynthesisUtterance(text);
         const v = currentVoice(); if (v) u.voice = v;
-        u.rate = parseFloat(rateEl.value || '1');
+        u.rate = parseFloat(rateEl.value || '0.8');
         u.onend = onend; u.onerror = onend;
         synth.speak(u);
       }
 
       function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s; }
+      
       function buildStartPoints() {
         const size = parseInt(setSizeEl.value, 10);
         startPointEl.innerHTML = '';
         for (let i = 0; i < SENTENCES.length; i += size) {
           const opt = document.createElement('option');
           opt.value = String(i);
-          opt.textContent = `${i + 1}: ${truncate(SENTENCES[i]?.chinese || '', 18)}`;
+          const completedInSet = Array.from({length: Math.min(size, SENTENCES.length - i)}, (_, k) => i + k)
+            .filter(idx => completedSentences.has(idx)).length;
+          const setProgress = completedInSet > 0 ? ` [${completedInSet}/${Math.min(size, SENTENCES.length - i)}✓]` : '';
+          // Use helper function for backward compatibility
+          opt.textContent = `${i + 1}: ${truncate(getKnown(SENTENCES[i]), 18)}${setProgress}`;
           startPointEl.appendChild(opt);
         }
       }
       setSizeEl.addEventListener('change', buildStartPoints);
       buildStartPoints();
 
-      let isStudying = false, paused = false;
+      let isStudying = false, paused = false, skipping = false;
+      let currentSpeechCallback = null;
 
       function makeOrderSlice(startIdx) {
         const seq = Array.from({ length: SENTENCES.length - startIdx }, (_, k) => startIdx + k);
@@ -194,15 +293,45 @@
 
       function speakSentenceBoth(row, reps, cb) {
         let remaining = reps;
+        const listenMode = listenBothEl.checked ? 'both' : 'target';
+        
         const cycle = () => {
+          if (skipping || !isStudying) { 
+            skipping = false;
+            cb && cb(); 
+            return; 
+          }
           if (remaining <= 0) { cb && cb(); return; }
-          // Chinese then English
-          speakText(row.chinese || '', () => {
-            speakText(row.english || '', () => {
-              remaining--; if (!isStudying || paused) { cb && cb(); return; }
+          
+          // Speak target language (use helper for backward compatibility)
+          currentSpeechCallback = () => {
+            if (skipping || !isStudying) {
+              skipping = false;
+              cb && cb();
+              return;
+            }
+            
+            // If listening to both languages, speak known language
+            if (listenMode === 'both') {
+              currentSpeechCallback = () => {
+                if (skipping || !isStudying) {
+                  skipping = false;
+                  cb && cb();
+                  return;
+                }
+                remaining--;
+                if (!isStudying || paused) { cb && cb(); return; }
+                if (remaining > 0) cycle(); else cb && cb();
+              };
+              speakText(getKnown(row), currentSpeechCallback);
+            } else {
+              // Target only mode - skip known language
+              remaining--;
+              if (!isStudying || paused) { cb && cb(); return; }
               if (remaining > 0) cycle(); else cb && cb();
-            });
-          });
+            }
+          };
+          speakText(getTarget(row), currentSpeechCallback);
         };
         cycle();
       }
@@ -213,11 +342,19 @@
         const next = () => {
           if (!isStudying) return;
           if (i >= end) { done && done(end); return; }
-          const row = SENTENCES[order[i]];
-          nowChinese.textContent = row.chinese || '';
-          nowEnglish.textContent = row.english || '';
-          progress.textContent = `Sentence ${order[i] + 1} / ${SENTENCES.length}`;
-          speakSentenceBoth(row, reps, () => { if (!isStudying) return; i++; if (!paused) next(); });
+          const sentenceIndex = order[i];
+          const row = SENTENCES[sentenceIndex];
+          // Use helper functions for backward compatibility
+          nowTarget.textContent = getTarget(row);
+          nowKnown.textContent = getKnown(row);
+          const completedMark = completedSentences.has(sentenceIndex) ? ' ✓' : '';
+          progress.textContent = `Sentence ${sentenceIndex + 1} / ${SENTENCES.length}${completedMark}`;
+          speakSentenceBoth(row, reps, () => { 
+            if (!isStudying) return;
+            markSentenceComplete(sentenceIndex);
+            i++; 
+            if (!paused && !skipping) next(); 
+          });
         };
         next();
       }
@@ -227,12 +364,15 @@
         const size = parseInt(setSizeEl.value, 10) || 5;
         const reps = parseInt(repetitionsEl.value, 10) || 3;
         let order = makeOrderSlice(startIdx);
-        showStudyView(); isStudying = true; paused = false;
+        showStudyView(); 
+        isStudying = true; 
+        paused = false; 
+        skipping = false;
         const doSet = (cursor) => {
-          if (cursor >= order.length) { showOptionsView(); return; }
+          if (cursor >= order.length) { showOptionsView(); buildStartPoints(); return; }
           studySet(order, cursor, size, reps, (newCursor) => {
             if (autoAdvanceEl.checked) doSet(newCursor);
-            else showOptionsView();
+            else { showOptionsView(); buildStartPoints(); }
           });
         };
         doSet(0);
@@ -243,13 +383,35 @@
 
       studyBtn.addEventListener('click', startStudy);
       backBtn.addEventListener('click', () => window.location.href = 'index.html');
+      resetProgressBtn.addEventListener('click', resetProgress);
+      
       pauseBtn.addEventListener('click', () => {
         if (!isStudying) return;
-        if (!paused) { synth.pause(); paused = true; pauseBtn.textContent = 'Resume'; }
-        else { synth.resume(); paused = false; pauseBtn.textContent = 'Pause'; }
+        if (!paused) { 
+          synth.pause(); 
+          paused = true; 
+          pauseBtn.textContent = 'Resume'; 
+        } else { 
+          synth.resume(); 
+          paused = false; 
+          pauseBtn.textContent = 'Pause'; 
+        }
       });
-      stopBtn.addEventListener('click', () => { synth.cancel(); showOptionsView(); });
+      
+      skipBtn.addEventListener('click', () => {
+        if (!isStudying) return;
+        console.log('Skip button clicked!');
+        skipping = true;
+        synth.cancel();
+      });
+      
+      stopBtn.addEventListener('click', () => { 
+        synth.cancel(); 
+        showOptionsView(); 
+        buildStartPoints(); 
+      });
 
+      loadProgress();
       showOptionsView();
     })();
   </script>
