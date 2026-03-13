@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Dungeon Crawler</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --bg-color: #1a1a2e;
+            --ui-bg: #16213e;
+            --accent: #e94560;
+            --text: #fff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text);
+            font-family: 'Press Start 2P', cursive;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background: #0f0f1a;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10;
+            text-align: center;
+        }
+
+        .hidden { display: none !important; }
+
+        h1 { color: var(--accent); text-shadow: 2px 2px #000; margin-bottom: 20px; }
+        h2 { font-size: 1.2rem; margin-bottom: 30px; color: #4cc9f0; }
+        p { font-size: 0.8rem; line-height: 1.5; color: #ccc; max-width: 600px; margin-bottom: 20px;}
+
+        button {
+            background: var(--accent);
+            border: 4px solid #fff;
+            color: white;
+            padding: 15px 30px;
+            font-family: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+            margin: 10px;
+        }
+
+        button:active { transform: scale(0.95); }
+        button:disabled { background: #555; border-color: #777; cursor: not-allowed; }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            border: 2px solid #444;
+            border-radius: 4px;
+        }
+
+        .bar-container {
+            width: 150px;
+            height: 10px;
+            background: #333;
+            margin-top: 5px;
+        }
+
+        .bar-fill { height: 100%; transition: width 0.2s; }
+        #hp-bar { background: #e94560; }
+        #xp-bar { background: #fca311; }
+
+        #skills-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .skill-btn {
+            width: 60px;
+            height: 60px;
+            border: 3px solid #fff;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.7rem;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .skill-btn.cooldown { opacity: 0.5; filter: grayscale(1); }
+        .key-hint { position: absolute; top: -10px; right: -5px; background: #fff; color: #000; font-size: 0.5rem; padding: 2px 4px; }
+
+        /* Floating Text */
+        .floater {
+            position: absolute;
+            font-weight: bold;
+            animation: floatUp 1s forwards;
+            pointer-events: none;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+        <div class="stat-box">
+            <div id="level-display">LVL 1</div>
+            <div class="bar-container"><div id="hp-bar" class="bar-fill" style="width: 100%"></div></div>
+            <div style="margin-top:5px; font-size:0.6rem;">HP</div>
+        </div>
+        <div class="stat-box" style="text-align: right;">
+            <div id="score-display">SCORE: 0</div>
+            <div class="bar-container" style="margin-left: auto;"><div id="xp-bar" class="bar-fill" style="width: 0%"></div></div>
+            <div style="margin-top:5px; font-size:0.6rem;">XP</div>
+        </div>
+    </div>
+
+    <div id="skills-container" class="hidden">
+        <!-- Skills injected by JS -->
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay">
+        <h1>DUNGEON QUEST</h1>
+        <p>Explore 3 procedural levels. Defeat enemies. Unlock classes.</p>
+        <p>WASD / Arrows to Move. SPACE to Attack. 1, 2, 3 for Skills.</p>
+        <button onclick="startGame()">ENTER DUNGEON</button>
+    </div>
+
+    <!-- Level Complete Screen -->
+    <div id="level-screen" class="overlay hidden">
+        <h1 id="level-title">LEVEL COMPLETE</h1>
+        <p id="level-desc">The path descends deeper...</p>
+        <button onclick="nextLevel()">DESCEND</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="overlay hidden">
+        <h1 style="color:red">YOU DIED</h1>
+        <p id="death-reason">Slain by a Goblin</p>
+        <button onclick="resetGame()">TRY AGAIN</button>
+    </div>
+    
+    <!-- Class Unlock Screen -->
+    <div id="class-screen" class="overlay hidden">
+        <h1 style="color:gold">NEW CLASS UNLOCKED!</h1>
+        <h2 id="unlock-name">Mage</h2>
+        <p id="unlock-desc">High damage, low health.</p>
+        <button onclick="closeClassScreen()">CLAIM</button>
+    </div>
+</div>
+
+<script>
+/** 
+ * GAME CONFIGURATION & STATE 
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_SIZE = 40;
+const COLS = 20;
+const ROWS = 15;
+
+// Game State
+let gameState = 'MENU'; // MENU, PLAYING, LEVEL_TRANSITION, GAMEOVER
+let currentLevel = 1;
+let frameCount = 0;
+let score = 0;
+
+// Entities
+let player;
+let enemies = [];
+let particles = [];
+let projectiles = [];
+let items = [];
+let map = []; // 1 = Wall, 0 = Floor
+
+// Classes & Progression
+const CLASSES = {
+    WARRIOR: { name: 'Warrior', hp: 120, speed: 4, color: '#e94560', skill: 'SLAM', unlocked: true },
+    MAGE: { name: 'Mage', hp: 80, speed: 5, color: '#4cc9f0', skill: 'FIREBALL', unlocked: false },
+    ROGUE: { name: 'Rogue', hp: 90, speed: 6, color: '#fca311', skill: 'DASH', unlocked: false }
+};
+
+// Input
+const keys = {};
+const mouse = { x: 0, y: 0, down: false };
+
+/**
+ * CLASSES
+ */
+
+class Entity {
+    constructor(x, y, size, color, speed) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.color = color;
+        this.speed = speed;
+        this.vx = 0;
+        this.vy = 0;
+        this.markedForDeletion = false;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.handleMapCollision();
+    }
+
+    handleMapCollision() {
+        // Simple AABB against tiles
+        const corners = [
+            {x: this.x, y: this.y},
+            {x: this.x + this.size, y: this.y},
+            {x: this.x, y: this.y + this.size},
+            {x: this.x + this.size, y: this.y + this.size}
+        ];
+
+        for (let p of corners) {
+            let c = Math.floor(p.x / TILE_SIZE);
+            let r = Math.floor(p.y / TILE_SIZE);
+            if (map[r] && map[r][c] === 1) {
+                // Push back
+                let center = {x: this.x + this.size/2, y: this.y + this.size/2};
+                let tileCenter = {x: c * TILE_SIZE + TILE_SIZE/2, y: r * TILE_SIZE + TILE_SIZE/2};
+                
+                if (Math.abs(center.x - tileCenter.x) > Math.abs(center.y - tileCenter.y)) {
+                    this.x = (center.x < tileCenter.x) ? (c * TILE_SIZE) - this.size : (c + 1) * TILE_SIZE;
+                } else {
+                    this.y = (center.y < tileCenter.y) ? (r * TILE_SIZE) - this.size : (r + 1) * TILE_SIZE;
+                }
+            }
+        }
+        
+        // Bounds check
+        if(this.x < 0) this.x = 0;
+        if(this.y < 0) this.y = 0;
+        if(this.x > canvas.width - this.size) this.x = canvas.width - this.size;
+        if(this.y > canvas.height - this.size) this.y = canvas.height - this.size;
+    }
+}
+
+class Player extends Entity {
+    constructor(classType) {
+        super(400, 300, 32, CLASSES[classType].color, CLASSES[classType].speed);
+        this.classType = classType;
+        this.maxHp = CLASSES[classType].hp;
+        this.hp = this.maxHp;
+        this.xp = 0;
+        this.level = 1;
+        this.nextLevelXp = 100;
+        this.damage = 10;
+        
+        // Cooldowns
+        this.attackCooldown = 0;
+        this.skillCooldown = 0;
+        this.skillActive = false;
+    }
+
+    update() {
+        this.vx = 0;
+        this.vy = 0;
+
+        if (keys['w'] || keys['arrowup']) this.vy = -this.speed;
+        if (keys['s'] || keys['arrowdown']) this.vy = this.speed;
+        if (keys['a'] || keys['arrowleft']) this.vx = -this.speed;
+        if (keys['d'] || keys['arrowright']) this.vx = this.speed;
+
+        // Normalize diagonal movement
+        if (this.vx !== 0 && this.vy !== 0) {
+            this.vx *= 0.707;
+            this.vy *= 0.707;
+        }
+
+        super.update();
+
+        // Cooldowns
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (this.skillCooldown > 0) this.skillCooldown--;
+
+        // Input Actions
+        if (keys[' '] && this.attackCooldown <= 0) this.attack();
+        if (keys['1'] && this.skillCooldown <= 0) this.useSkill();
+    }
+
+    attack() {
+        this.attackCooldown = 20;
+        // Simple melee hitbox in front of player
+        let hitX = this.x + this.size/2;
+        let hitY = this.y + this.size/2;
+        
+        // Determine direction based on last movement or default right
+        let range = 40;
+        let dirX = 0, dirY = 0;
+        
+        // Simple logic: attack towards nearest enemy or direction of movement
+        // For simplicity, let's do a 360 spin attack
+        createParticles(this.x + 16, this.y + 16, this.color, 5);
+        
+        enemies.forEach(e => {
+            let dx = (e.x + e.size/2) - (this.x + 16);
+            let dy = (e.y + e.size/2) - (this.y + 16);
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < range + e.size/2) {
+                e.takeDamage(this.damage);
+                screenShake(5);
+            }
+        });
+    }
+
+    useSkill() {
+        this.skillCooldown = 120; // 2 seconds approx
+        const c = CLASSES[this.classType];
+        
+        if (this.classType === 'MAGE') {
+            // Fireball
+            projectiles.push(new Projectile(this.x+16, this.y+16, mouse.x, mouse.y, 8, 25, '#ff0000'));
+        } else if (this.classType === 'ROGUE') {
+            // Dash
+            this.x += (Math.random() - 0.5) * 100; // Simple random dash for demo, ideally directional
+            this.y += (Math.random() - 0.5) * 100;
+            createParticles(this.x, this.y, '#fff', 10);
+        } else if (this.classType === 'WARRIOR') {
+            // Slam (AoE)
+            enemies.forEach(e => {
+                let dx = (e.x + e.size/2) - (this.x + 16);
+                let dy = (e.y + e.size/2) - (this.y + 16);
+                if (Math.sqrt(dx*dx + dy*dy) < 100) {
+                    e.takeDamage(this.damage * 2);
+                    e.vx = dx * 0.5; // Knockback
+                    e.vy = dy * 0.5;
+                }
+            });
+            screenShake(10);
+        }
+    }
+
+    gainXp(amount) {
+        this.xp += amount;
+        if (this.xp >= this.nextLevelXp) {
+            this.level++;
+            this.xp -= this.nextLevelXp;
+            this.nextLevelXp = Math.floor(this.nextLevelXp * 1.5);
+            this.maxHp += 20;
+            this.hp = this.maxHp;
+            this.damage += 2;
+            showFloatingText("LEVEL UP!", this.x, this.y, '#ffff00');
+            checkUnlocks();
+        }
+        updateHud();
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        showFloatingText(`-${amount}`, this.x, this.y, '#ff0000');
+        updateHud();
+        if (this.hp <= 0) {
+            gameOver("Slain in the dungeon");
+        }
+    }
+}
+
+class Enemy extends Entity {
+    constructor(x, y, type) {
+        let color = type === 'BOSS' ? '#800080' : '#708090';
+        let hp = type === 'BOSS' ? 100 : 30;
+        let dmg = type === 'BOSS' ? 20 : 5;
+        let speed = type === 'BOSS' ? 2 : 1.5;
+        super(x, y, 32, color, speed);
+        this.type = type;
+        this.hp = hp;
+        this.maxHp = hp;
+        this.damage = dmg;
+        this.attackTimer = 0;
+    }
+
+    update() {
+        // Simple AI: Move towards player
+        let dx = player.x - this.x;
+        let dy = player.y - this.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist > 40) {
+            this.vx = (dx / dist) * this.speed;
+            this.vy = (dy / dist) / this.speed;
+        } else {
+            this.vx = 0;
+            this.vy = 0;
+            // Attack Player
+            if (this.attackTimer <= 0) {
+                player.takeDamage(this.damage);
+                this.attackTimer = 60;
+            }
+        }
+        this.attackTimer--;
+        super.update();
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        showFloatingText(amount, this.x, this.y, '#fff');
+        createParticles(this.x + 16, this.y + 16, this.color, 3);
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            player.gainXp(this.type === 'BOSS' ? 500 : 20);
+            score += this.type === 'BOSS' ? 1000 : 100;
+            
+            // Chance to drop item
+            if (Math.random() < 0.1) {
+                items.push(new Item(this.x, this.y));
+            }
+        }
+    }
+}
+
+class Projectile extends Entity {
+    constructor(x, y, tx, ty, speed, damage, color) {
+        super(x, y, 10, color, speed);
+        let angle = Math.atan2(ty - y, tx - x);
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.damage = damage;
+        this.life = 100;
+    }
+
+    update() {
+        super.update();
+        this.life--;
+        if (this.life <= 0) this.markedForDeletion = true;
+
+        // Hit enemies
+        enemies.forEach(e => {
+            if (rectIntersect(this.x, this.y, this.size, this.size, e.x, e.y, e.size, e.size)) {
+                e.takeDamage(this.damage);
+                this.markedForDeletion = true;
+            }
+        });
+    }
+}
+
+class Item extends Entity {
+    constructor(x, y) {
+        super(x, y, 20, '#00ff00', 0);
+        this.type = 'POTION';
+    }
+    
+    update() {
+        if (rectIntersect(this.x, this.y, this.size, this.size, player.x, player.y, player.size, player.size)) {
+            player.hp = Math.min(player.hp + 30, player.maxHp);
+            this.markedForDeletion = true;
+            showFloatingText("+30 HP", this.x, this.y, '#00ff00');
+            updateHud();
+        }
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 4 + 2;
+        this.vx = (Math.random() - 0.5) * 5;
+        this.vy = (Math.random() - 0.5) * 5;
+        this.life = 30;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life--;
+        this.size *= 0.9;
+    }
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+    }
+}
+
+/**
+ * PROCEDURAL GENERATION
+ */
+function generateMap() {
+    // Initialize with walls
+    map = [];
+    for (let r = 0; r < ROWS; r++) {
+        let row = [];
+        for (let c = 0; c < COLS; c++) {
+            row.push(1);
+        }
+        map.push(row);
+    }
+
+    // Drunkard's Walk
+    let floorCount = 0;
+    let targetFloors = (COLS * ROWS) * 0.4; // 40% open space
+    let x = Math.floor(COLS/2);
+    let y = Math.floor(ROWS/2);
+
+    // Ensure player start is clear
+    map[y][x] = 0;
+
+    while (floorCount < targetFloors) {
+        if (map[y][x] === 1) {
+            map[y][x] = 0;
+            floorCount++;
+        }
+
+        let dir = Math.floor(Math.random() * 4);
+        if (dir === 0 && y > 1) y--;
+        else if (dir === 1 && y < ROWS - 2) y++;
+        else if (dir === 2 && x > 1) x--;
+        else if (dir === 3 && x < COLS - 2) x++;
+    }
+
+    // Place Boss at far end (simple heuristic)
+    // Find furthest floor tile from center
+    let maxDist = 0;
+    let bossPos = {x: 0, y: 0};
+    
+    for(let r=0; r<ROWS; r++){
+        for(let c=0; c<COLS; c++){
+            if(map[r][c] === 0){
+                let d = Math.sqrt(Math.pow(c - COLS/2, 2) + Math.pow(r - ROWS/2, 2));
+                if(d > maxDist) {
+                    maxDist = d;
+                    bossPos = {x: c * TILE_SIZE, y: r * TILE_SIZE};
+                }
+            }
+        }
+    }
+    
+    return bossPos;
+}
+
+/**
+ * GAME LOOP & LOGIC
+ */
+
+function startGame() {
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('skills-container').classList.remove('hidden');
+    resetGameVariables();
+    loadLevel(1);
+    gameState = 'PLAYING';
+    gameLoop();
+}
+
+function resetGameVariables() {
+    score = 0;
+    // Reset player class progress if needed, or keep it persistent? 
+    // Let's keep unlocks persistent but reset stats for a "run"
+    player = new Player('WARRIOR');
+    updateHud();
+    renderSkills();
+}
+
+function loadLevel(lvl) {
+    currentLevel = lvl;
+    document.getElementById('level-display').innerText = `LVL ${lvl}`;
+    
+    // Generate Map
+    let bossPos = generateMap();
+    
+    // Reset Entities
+    enemies = [];
+    projectiles = [];
+    items = [];
+    particles = [];
+    
+    // Spawn Player Center
+    player.x = (COLS/2) * TILE_SIZE;
+    player.y = (ROWS/2) * TILE_SIZE;
+    
+    // Spawn Enemies
+    let enemyCount = 5 + (lvl * 3);
+    for(let i=0; i<enemyCount; i++) {
+        let pos = getRandomFloorTile();
+        enemies.push(new Enemy(pos.x, pos.y, 'MINION'));
+    }
+    
+    // Spawn Boss
+    enemies.push(new Enemy(bossPos.x, bossPos.y, 'BOSS'));
+    
+    updateHud();
+}
+
+function getRandomFloorTile() {
+    let valid = false;
+    let x, y;
+    while(!valid) {
+        let c = Math.floor(Math.random() * COLS);
+        let r = Math.floor(Math.random() * ROWS);
+        if(map[r][c] === 0) {
+            x = c * TILE_SIZE;
+            y = r * TILE_SIZE;
+            valid = true;
+        }
+    }
+    return {x, y};
+}
+
+function nextLevel() {
+    document.getElementById('level-screen').classList.add('hidden');
+    if (currentLevel < 3) {
+        loadLevel(currentLevel + 1);
+        gameState = 'PLAYING';
+    } else {
+        // Game Won Logic (Simplified as restart for demo)
+        alert("You have conquered the dungeon!");
+        resetGame();
+    }
+}
+
+function gameOver(reason) {
+    gameState = 'GAMEOVER';
+    document.getElementById('death-reason').innerText = reason;
+    document.getElementById('game-over-screen').classList.remove('hidden');
+}
+
+function checkUnlocks() {
+    if (player.level >= 3 && !CLASSES.MAGE.unlocked) {
+        unlockClass('MAGE', 'High damage spells, low health.');
+    } else if (player.level >= 5 && !CLASSES.ROGUE.unlocked) {
+        unlockClass('ROGUE', 'Fast movement, dash ability.');
+    }
+}
+
+function unlockClass(key, desc) {
+    CLASSES[key].unlocked = true;
+    document.getElementById('unlock-name').innerText = CLASSES[key].name;
+    document.getElementById('unlock-desc').innerText = desc;
+    document.getElementById('class-screen').classList.remove('hidden');
+    renderSkills(); // Refresh UI
+}
+
+function closeClassScreen() {
+    document.getElementById('class-screen').classList.add('hidden');
+}
+
+/**
+ * RENDERING & UTILS
+ */
+
+function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
+}
+
+function createParticles(x, y, color, count) {
+    for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+}
+
+function showFloatingText(text, x, y, color) {
+    let el = document.createElement('div');
+    el.className = 'floater';
+    el.innerText = text;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.color = color;
+    document.getElementById('game-container').appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+}
+
+function updateHud() {
+    let hpPct = (player.hp / player.maxHp) * 100;
+    let xpPct = (player.xp / player.nextLevelXp) * 100;
+    document.getElementById('hp-bar').style.width = `${Math.max(0, hpPct)}%`;
+    document.getElementById('xp-bar').style.width = `${xpPct}%`;
+    document.getElementById('score-display').innerText = `SCORE: ${score}`;
+}
+
+function renderSkills() {
+    const container = document.getElementById('skills-container');
+    container.innerHTML = '';
+    
+    // Attack is always Space
+    // Skills are 1, 2, 3 based on class
+    
+    const skillBtn = document.createElement('div');
+    skillBtn.className = 'skill-btn';
+    skillBtn.innerHTML = `<span class="key-hint">1</span>${CLASSES[player.classType].skill}`;
+    skillBtn.onclick = () => player.useSkill();
+    container.appendChild(skillBtn);
+}
+
+// Screen Shake
+let shakeIntensity = 0;
+function screenShake(amount) {
+    shakeIntensity = amount;
+}
+
+function gameLoop() {
+    if (gameState !== 'PLAYING') return;
+
+    requestAnimationFrame(gameLoop);
+    frameCount++;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Screen Shake Logic
+    ctx.save();
+    if (shakeIntensity > 0) {
+        let dx = (Math.random() - 0.5) * shakeIntensity;
+        let dy = (Math.random() - 0.5) * shakeIntensity;
+        ctx.translate(dx, dy);
+        shakeIntensity *= 0.9;
+        if(shakeIntensity < 0.5) shakeIntensity = 0;
+    }
+
+    // Draw Map
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = '#333'; // Wall
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                // Detail
+                ctx.strokeStyle = '#444';
+                ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            } else {
+                ctx.fillStyle = '#1a1a2e'; // Floor
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+
+    // Draw Exit/Goal (Visual only for now, beating boss triggers next level)
+    // In a full game, this would be a door.
+
+    // Update & Draw Entities
+    items.forEach(i => { i.update(); i.draw(); });
+    projectiles.forEach(p => { p.update(); p.draw(); });
+    enemies.forEach(e => { e.update(); e.draw(); });
+    player.update();
+    player.draw();
+    
+    // Particles
+    particles.forEach((p, index) => {
+        p.update();
+        p.draw();
+        if (p.life <= 0) particles.splice(index, 1);
+    });
+
+    // Cleanup dead entities
+    enemies = enemies.filter(e => !e.markedForDeletion);
+    projectiles = projectiles.filter(p => !p.markedForDeletion);
+    items = items.filter(i => !i.markedForDeletion);
+
+    // Check Level Clear
+    if (enemies.length === 0) {
+        gameState = 'LEVEL_TRANSITION';
+        document.getElementById('level-title').innerText = `LEVEL ${currentLevel} CLEARED`;
+        document.getElementById('level-screen').classList.remove('hidden');
+    }
+
+    // Skill Cooldown UI
+    const skillBtn = document.querySelector('.skill-btn');
+    if(player.skillCooldown > 0) {
+        skillBtn.classList.add('cooldown');
+        skillBtn.style.opacity = (player.skillCooldown / 120);
+    } else {
+        skillBtn.classList.remove('cooldown');
+        skillBtn.style.opacity = 1;
+    }
+
+    ctx.restore();
+}
+
+/**
+ * INPUT LISTENERS
+ */
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === ' ') keys[' '] = true;
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+    if (e.key === ' ') keys[' '] = false;
+});
+
+canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+});
+
+function resetGame() {
+    location.reload(); // Simplest way to fully reset for this demo
+}
+
+</script>
+</body>
+</html>
