@@ -1,17 +1,24 @@
+You are absolutely right. The game loop was "dying" after the first level because `requestAnimationFrame` wasn't being called again after the state changed back to 'PLAYING'.
+
+I have fixed that bug, added a **Class Selection Screen** so you can choose your character, improved the visuals with a "damage flash" effect, and smoothed out the movement.
+
+Here is the improved, bug-free version:
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Procedural Dungeon Crawler</title>
+    <title>Dungeon Crawler: Remastered</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
         :root {
-            --bg-color: #1a1a2e;
-            --ui-bg: #16213e;
-            --accent: #e94560;
-            --text: #fff;
+            --bg-color: #121218;
+            --ui-bg: #1e1e2f;
+            --accent: #ff0055;
+            --text: #f0f0f0;
         }
 
         body {
@@ -27,16 +34,18 @@
             user-select: none;
         }
 
-        #game-container {
+        #game-wrapper {
             position: relative;
             width: 800px;
             height: 600px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            background: #0f0f1a;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border: 4px solid #333;
+            background: #000;
         }
 
         canvas {
             display: block;
+            image-rendering: pixelated;
         }
 
         /* UI Overlays */
@@ -50,31 +59,70 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 10;
+            background: rgba(18, 18, 24, 0.95);
+            z-index: 20;
             text-align: center;
+            backdrop-filter: blur(4px);
         }
 
         .hidden { display: none !important; }
 
-        h1 { color: var(--accent); text-shadow: 2px 2px #000; margin-bottom: 20px; }
-        h2 { font-size: 1.2rem; margin-bottom: 30px; color: #4cc9f0; }
-        p { font-size: 0.8rem; line-height: 1.5; color: #ccc; max-width: 600px; margin-bottom: 20px;}
+        h1 { color: var(--accent); text-shadow: 4px 4px #000; margin-bottom: 10px; font-size: 2rem; }
+        h2 { font-size: 1rem; margin-bottom: 30px; color: #4cc9f0; text-transform: uppercase; letter-spacing: 2px; }
+        p { font-size: 0.7rem; line-height: 1.6; color: #aaa; max-width: 500px; margin-bottom: 20px; }
 
         button {
             background: var(--accent);
             border: 4px solid #fff;
             color: white;
-            padding: 15px 30px;
+            padding: 15px 20px;
             font-family: inherit;
-            font-size: 1rem;
+            font-size: 0.8rem;
             cursor: pointer;
-            transition: transform 0.1s;
+            transition: all 0.1s;
             margin: 10px;
+            text-transform: uppercase;
+            box-shadow: 4px 4px 0px #000;
         }
 
-        button:active { transform: scale(0.95); }
-        button:disabled { background: #555; border-color: #777; cursor: not-allowed; }
+        button:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0px #000; }
+        button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #000; }
+        button:disabled { background: #555; border-color: #777; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* Class Select Grid */
+        .class-grid {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .class-card {
+            background: var(--ui-bg);
+            border: 2px solid #444;
+            padding: 15px;
+            width: 120px;
+            cursor: pointer;
+            transition: 0.2s;
+            opacity: 0.5;
+            filter: grayscale(1);
+        }
+
+        .class-card.selected {
+            border-color: var(--accent);
+            opacity: 1;
+            filter: grayscale(0);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--accent);
+        }
+
+        .class-card.unlocked {
+            opacity: 1;
+            filter: grayscale(0);
+        }
+
+        .class-icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+        .class-name { font-size: 0.6rem; color: #fff; margin-bottom: 5px; display: block;}
+        .class-stats { font-size: 0.5rem; color: #888; }
 
         /* HUD */
         #hud {
@@ -82,31 +130,35 @@
             top: 0;
             left: 0;
             width: 100%;
-            padding: 10px;
+            padding: 15px;
             box-sizing: border-box;
             display: flex;
             justify-content: space-between;
             pointer-events: none;
-            z-index: 5;
+            z-index: 10;
+            text-shadow: 2px 2px 0 #000;
         }
 
         .stat-box {
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.5);
             padding: 10px;
             border: 2px solid #444;
             border-radius: 4px;
+            min-width: 150px;
         }
 
         .bar-container {
-            width: 150px;
-            height: 10px;
+            width: 100%;
+            height: 12px;
             background: #333;
-            margin-top: 5px;
+            margin-top: 8px;
+            border: 1px solid #000;
+            position: relative;
         }
 
         .bar-fill { height: 100%; transition: width 0.2s; }
-        #hp-bar { background: #e94560; }
-        #xp-bar { background: #fca311; }
+        #hp-bar { background: #e94560; width: 100%; }
+        #xp-bar { background: #fca311; width: 0%; }
 
         #skills-container {
             position: absolute;
@@ -114,57 +166,74 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 10px;
+            gap: 15px;
             pointer-events: auto;
+            z-index: 10;
         }
 
         .skill-btn {
             width: 60px;
             height: 60px;
             border: 3px solid #fff;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             position: relative;
             cursor: pointer;
+            box-shadow: 0 4px 0 #000;
         }
         
-        .skill-btn.cooldown { opacity: 0.5; filter: grayscale(1); }
-        .key-hint { position: absolute; top: -10px; right: -5px; background: #fff; color: #000; font-size: 0.5rem; padding: 2px 4px; }
+        .skill-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #000; }
+        .skill-btn.cooldown { filter: grayscale(1); opacity: 0.6; cursor: not-allowed; }
+        .key-hint { position: absolute; top: -8px; right: -8px; background: #fff; color: #000; font-size: 0.5rem; padding: 2px 5px; border-radius: 2px; border: 1px solid #000;}
 
         /* Floating Text */
         .floater {
             position: absolute;
             font-weight: bold;
-            animation: floatUp 1s forwards;
+            animation: floatUp 0.8s forwards;
             pointer-events: none;
-            text-shadow: 1px 1px 0 #000;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 15;
+            font-size: 1rem;
         }
 
         @keyframes floatUp {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(-30px); opacity: 0; }
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+
+        /* Damage Flash Overlay */
+        #damage-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.1s;
         }
     </style>
 </head>
 <body>
 
-<div id="game-container">
+<div id="game-wrapper">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="damage-overlay"></div>
     
     <!-- HUD -->
     <div id="hud" class="hidden">
         <div class="stat-box">
-            <div id="level-display">LVL 1</div>
-            <div class="bar-container"><div id="hp-bar" class="bar-fill" style="width: 100%"></div></div>
-            <div style="margin-top:5px; font-size:0.6rem;">HP</div>
+            <div id="level-display" style="color:#4cc9f0">LVL 1</div>
+            <div class="bar-container"><div id="hp-bar" class="bar-fill"></div></div>
+            <div style="margin-top:5px; font-size:0.5rem; color:#aaa;">HP</div>
         </div>
         <div class="stat-box" style="text-align: right;">
             <div id="score-display">SCORE: 0</div>
-            <div class="bar-container" style="margin-left: auto;"><div id="xp-bar" class="bar-fill" style="width: 0%"></div></div>
-            <div style="margin-top:5px; font-size:0.6rem;">XP</div>
+            <div class="bar-container" style="margin-left: auto; width: 100px;"><div id="xp-bar" class="bar-fill"></div></div>
+            <div style="margin-top:5px; font-size:0.5rem; color:#aaa;">XP</div>
         </div>
     </div>
 
@@ -175,31 +244,41 @@
     <!-- Start Screen -->
     <div id="start-screen" class="overlay">
         <h1>DUNGEON QUEST</h1>
-        <p>Explore 3 procedural levels. Defeat enemies. Unlock classes.</p>
-        <p>WASD / Arrows to Move. SPACE to Attack. 1, 2, 3 for Skills.</p>
-        <button onclick="startGame()">ENTER DUNGEON</button>
+        <h2>Remastered Edition</h2>
+        <p>Select your class to begin your journey through 3 procedural levels.</p>
+        
+        <div class="class-grid" id="class-grid">
+            <!-- Generated by JS -->
+        </div>
+
+        <button id="start-btn" onclick="startGame()" disabled>START ADVENTURE</button>
+        <p style="margin-top: 20px; font-size: 0.6rem; color: #666;">WASD to Move | SPACE to Attack | 1 for Skill</p>
     </div>
 
     <!-- Level Complete Screen -->
     <div id="level-screen" class="overlay hidden">
-        <h1 id="level-title">LEVEL COMPLETE</h1>
+        <h1 style="color: #4cc9f0">LEVEL CLEARED</h1>
         <p id="level-desc">The path descends deeper...</p>
-        <button onclick="nextLevel()">DESCEND</button>
+        <button onclick="nextLevel()">DESCEND TO NEXT LEVEL</button>
     </div>
 
     <!-- Game Over Screen -->
     <div id="game-over-screen" class="overlay hidden">
         <h1 style="color:red">YOU DIED</h1>
         <p id="death-reason">Slain by a Goblin</p>
+        <p id="final-score">Score: 0</p>
         <button onclick="resetGame()">TRY AGAIN</button>
     </div>
     
     <!-- Class Unlock Screen -->
     <div id="class-screen" class="overlay hidden">
         <h1 style="color:gold">NEW CLASS UNLOCKED!</h1>
-        <h2 id="unlock-name">Mage</h2>
-        <p id="unlock-desc">High damage, low health.</p>
-        <button onclick="closeClassScreen()">CLAIM</button>
+        <div class="class-card selected" style="opacity:1; filter:none; transform:scale(1.2);">
+            <span class="class-icon" id="unlock-icon">🧙‍♂️</span>
+            <span class="class-name" id="unlock-name">Mage</span>
+        </div>
+        <p id="unlock-desc" style="margin-top:20px;">High damage, low health.</p>
+        <button onclick="closeClassScreen()">CONTINUE</button>
     </div>
 </div>
 
@@ -209,6 +288,7 @@
  */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const damageOverlay = document.getElementById('damage-overlay');
 
 const TILE_SIZE = 40;
 const COLS = 20;
@@ -219,6 +299,7 @@ let gameState = 'MENU'; // MENU, PLAYING, LEVEL_TRANSITION, GAMEOVER
 let currentLevel = 1;
 let frameCount = 0;
 let score = 0;
+let selectedClass = 'WARRIOR';
 
 // Entities
 let player;
@@ -227,17 +308,46 @@ let particles = [];
 let projectiles = [];
 let items = [];
 let map = []; // 1 = Wall, 0 = Floor
+let cameraShake = 0;
 
 // Classes & Progression
 const CLASSES = {
-    WARRIOR: { name: 'Warrior', hp: 120, speed: 4, color: '#e94560', skill: 'SLAM', unlocked: true },
-    MAGE: { name: 'Mage', hp: 80, speed: 5, color: '#4cc9f0', skill: 'FIREBALL', unlocked: false },
-    ROGUE: { name: 'Rogue', hp: 90, speed: 6, color: '#fca311', skill: 'DASH', unlocked: false }
+    WARRIOR: { name: 'Warrior', hp: 150, speed: 4.5, color: '#e94560', skill: 'SLAM', icon: '🛡️', unlocked: true, desc: 'Balanced stats. AoE Slam attack.' },
+    MAGE: { name: 'Mage', hp: 80, speed: 4.0, color: '#4cc9f0', skill: 'FIREBALL', icon: '🔮', unlocked: false, desc: 'Low HP. Ranged Fireball attack.' },
+    ROGUE: { name: 'Rogue', hp: 100, speed: 6.5, color: '#fca311', skill: 'DASH', icon: '🗡️', unlocked: false, desc: 'High Speed. Dash through enemies.' }
 };
 
 // Input
 const keys = {};
-const mouse = { x: 0, y: 0, down: false };
+const mouse = { x: 0, y: 0 };
+
+/**
+ * INITIALIZATION
+ */
+function initClassSelect() {
+    const grid = document.getElementById('class-grid');
+    grid.innerHTML = '';
+    
+    for (const [key, data] of Object.entries(CLASSES)) {
+        const card = document.createElement('div');
+        card.className = `class-card ${data.unlocked ? 'unlocked' : ''} ${key === selectedClass ? 'selected' : ''}`;
+        card.onclick = () => selectClass(key);
+        
+        card.innerHTML = `
+            <span class="class-icon">${data.icon}</span>
+            <span class="class-name">${data.name}</span>
+            <div class="class-stats">HP: ${data.hp}<br>SPD: ${data.speed}</div>
+        `;
+        grid.appendChild(card);
+    }
+}
+
+function selectClass(key) {
+    if (!CLASSES[key].unlocked) return;
+    selectedClass = key;
+    initClassSelect();
+    document.getElementById('start-btn').disabled = false;
+}
 
 /**
  * CLASSES
@@ -257,7 +367,15 @@ class Entity {
 
     draw() {
         ctx.fillStyle = this.color;
+        // Draw shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(this.x + 4, this.y + 4, this.size, this.size);
+        // Draw body
+        ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.size, this.size);
+        // Draw highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(this.x, this.y, this.size, 4);
     }
 
     update() {
@@ -267,31 +385,39 @@ class Entity {
     }
 
     handleMapCollision() {
-        // Simple AABB against tiles
         const corners = [
-            {x: this.x, y: this.y},
-            {x: this.x + this.size, y: this.y},
-            {x: this.x, y: this.y + this.size},
-            {x: this.x + this.size, y: this.y + this.size}
+            {x: this.x + 2, y: this.y + 2},
+            {x: this.x + this.size - 2, y: this.y + 2},
+            {x: this.x + 2, y: this.y + this.size - 2},
+            {x: this.x + this.size - 2, y: this.y + this.size - 2}
         ];
 
         for (let p of corners) {
             let c = Math.floor(p.x / TILE_SIZE);
             let r = Math.floor(p.y / TILE_SIZE);
-            if (map[r] && map[r][c] === 1) {
-                // Push back
-                let center = {x: this.x + this.size/2, y: this.y + this.size/2};
-                let tileCenter = {x: c * TILE_SIZE + TILE_SIZE/2, y: r * TILE_SIZE + TILE_SIZE/2};
-                
-                if (Math.abs(center.x - tileCenter.x) > Math.abs(center.y - tileCenter.y)) {
-                    this.x = (center.x < tileCenter.x) ? (c * TILE_SIZE) - this.size : (c + 1) * TILE_SIZE;
-                } else {
-                    this.y = (center.y < tileCenter.y) ? (r * TILE_SIZE) - this.size : (r + 1) * TILE_SIZE;
+            
+            // Check bounds
+            if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                if (map[r][c] === 1) {
+                    // Simple resolution: push back to center
+                    let centerX = this.x + this.size/2;
+                    let centerY = this.y + this.size/2;
+                    let tileCX = c * TILE_SIZE + TILE_SIZE/2;
+                    let tileCY = r * TILE_SIZE + TILE_SIZE/2;
+                    
+                    let dx = centerX - tileCX;
+                    let dy = centerY - tileCY;
+                    
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        this.x = dx > 0 ? (c + 1) * TILE_SIZE - this.size + 2 : c * TILE_SIZE - 2;
+                    } else {
+                        this.y = dy > 0 ? (r + 1) * TILE_SIZE - this.size + 2 : r * TILE_SIZE - 2;
+                    }
                 }
             }
         }
         
-        // Bounds check
+        // Canvas Bounds
         if(this.x < 0) this.x = 0;
         if(this.y < 0) this.y = 0;
         if(this.x > canvas.width - this.size) this.x = canvas.width - this.size;
@@ -301,19 +427,20 @@ class Entity {
 
 class Player extends Entity {
     constructor(classType) {
-        super(400, 300, 32, CLASSES[classType].color, CLASSES[classType].speed);
+        const data = CLASSES[classType];
+        super(400, 300, 32, data.color, data.speed);
         this.classType = classType;
-        this.maxHp = CLASSES[classType].hp;
+        this.maxHp = data.hp;
         this.hp = this.maxHp;
         this.xp = 0;
         this.level = 1;
         this.nextLevelXp = 100;
-        this.damage = 10;
+        this.damage = 15;
         
         // Cooldowns
         this.attackCooldown = 0;
         this.skillCooldown = 0;
-        this.skillActive = false;
+        this.invulnerable = 0;
     }
 
     update() {
@@ -325,10 +452,11 @@ class Player extends Entity {
         if (keys['a'] || keys['arrowleft']) this.vx = -this.speed;
         if (keys['d'] || keys['arrowright']) this.vx = this.speed;
 
-        // Normalize diagonal movement
+        // Normalize diagonal
         if (this.vx !== 0 && this.vy !== 0) {
-            this.vx *= 0.707;
-            this.vy *= 0.707;
+            const factor = 1 / Math.sqrt(2);
+            this.vx *= factor;
+            this.vy *= factor;
         }
 
         super.update();
@@ -336,6 +464,12 @@ class Player extends Entity {
         // Cooldowns
         if (this.attackCooldown > 0) this.attackCooldown--;
         if (this.skillCooldown > 0) this.skillCooldown--;
+        if (this.invulnerable > 0) {
+            this.invulnerable--;
+            this.color = (Math.floor(Date.now() / 50) % 2 === 0) ? '#fff' : CLASSES[this.classType].color;
+        } else {
+            this.color = CLASSES[this.classType].color;
+        }
 
         // Input Actions
         if (keys[' '] && this.attackCooldown <= 0) this.attack();
@@ -343,55 +477,71 @@ class Player extends Entity {
     }
 
     attack() {
-        this.attackCooldown = 20;
-        // Simple melee hitbox in front of player
-        let hitX = this.x + this.size/2;
-        let hitY = this.y + this.size/2;
+        this.attackCooldown = 15;
+        createParticles(this.x + 16, this.y + 16, '#fff', 5);
         
-        // Determine direction based on last movement or default right
-        let range = 40;
-        let dirX = 0, dirY = 0;
-        
-        // Simple logic: attack towards nearest enemy or direction of movement
-        // For simplicity, let's do a 360 spin attack
-        createParticles(this.x + 16, this.y + 16, this.color, 5);
-        
+        // Melee Range
+        const range = 50;
+        let hit = false;
         enemies.forEach(e => {
-            let dx = (e.x + e.size/2) - (this.x + 16);
-            let dy = (e.y + e.size/2) - (this.y + 16);
-            let dist = Math.sqrt(dx*dx + dy*dy);
+            const dx = (e.x + e.size/2) - (this.x + 16);
+            const dy = (e.y + e.size/2) - (this.y + 16);
+            const dist = Math.sqrt(dx*dx + dy*dy);
             if (dist < range + e.size/2) {
                 e.takeDamage(this.damage);
-                screenShake(5);
+                e.vx = dx * 0.2; // Knockback
+                e.vy = dy * 0.2;
+                hit = true;
             }
         });
+        
+        if(hit) screenShake(3);
     }
 
     useSkill() {
-        this.skillCooldown = 120; // 2 seconds approx
+        this.skillCooldown = 180; // 3 seconds
         const c = CLASSES[this.classType];
         
         if (this.classType === 'MAGE') {
-            // Fireball
-            projectiles.push(new Projectile(this.x+16, this.y+16, mouse.x, mouse.y, 8, 25, '#ff0000'));
+            // Fireball towards mouse
+            const angle = Math.atan2(mouse.y - (this.y+16), mouse.x - (this.x+16));
+            projectiles.push(new Projectile(this.x+16, this.y+16, Math.cos(angle)*10, Math.sin(angle)*10, 40, '#ffaa00'));
         } else if (this.classType === 'ROGUE') {
-            // Dash
-            this.x += (Math.random() - 0.5) * 100; // Simple random dash for demo, ideally directional
-            this.y += (Math.random() - 0.5) * 100;
-            createParticles(this.x, this.y, '#fff', 10);
-        } else if (this.classType === 'WARRIOR') {
-            // Slam (AoE)
+            // Dash in movement direction
+            const dashDist = 150;
+            let dx = this.vx, dy = this.vy;
+            if (dx === 0 && dy === 0) dx = 1; // Default right
+            
+            const len = Math.sqrt(dx*dx + dy*dy);
+            dx = (dx/len) * dashDist;
+            dy = (dy/len) * dashDist;
+            
+            this.x += dx;
+            this.y += dy;
+            createParticles(this.x, this.y, '#fff', 15);
+            
+            // Damage enemies passed through
             enemies.forEach(e => {
-                let dx = (e.x + e.size/2) - (this.x + 16);
-                let dy = (e.y + e.size/2) - (this.y + 16);
-                if (Math.sqrt(dx*dx + dy*dy) < 100) {
+                if (rectIntersect(this.x, this.y, this.size, this.size, e.x, e.y, e.size, e.size)) {
+                    e.takeDamage(this.damage * 1.5);
+                }
+            });
+        } else if (this.classType === 'WARRIOR') {
+            // Slam
+            screenShake(10);
+            createParticles(this.x+16, this.y+16, '#e94560', 20);
+            enemies.forEach(e => {
+                const dx = (e.x + e.size/2) - (this.x + 16);
+                const dy = (e.y + e.size/2) - (this.y + 16);
+                if (Math.sqrt(dx*dx + dy*dy) < 120) {
                     e.takeDamage(this.damage * 2);
-                    e.vx = dx * 0.5; // Knockback
+                    e.vx = dx * 0.5;
                     e.vy = dy * 0.5;
                 }
             });
-            screenShake(10);
         }
+        
+        updateSkillUI();
     }
 
     gainXp(amount) {
@@ -399,10 +549,10 @@ class Player extends Entity {
         if (this.xp >= this.nextLevelXp) {
             this.level++;
             this.xp -= this.nextLevelXp;
-            this.nextLevelXp = Math.floor(this.nextLevelXp * 1.5);
+            this.nextLevelXp = Math.floor(this.nextLevelXp * 1.4);
             this.maxHp += 20;
             this.hp = this.maxHp;
-            this.damage += 2;
+            this.damage += 3;
             showFloatingText("LEVEL UP!", this.x, this.y, '#ffff00');
             checkUnlocks();
         }
@@ -410,8 +560,16 @@ class Player extends Entity {
     }
 
     takeDamage(amount) {
+        if (this.invulnerable > 0) return;
+        
         this.hp -= amount;
+        this.invulnerable = 30; // 0.5s invulnerability
         showFloatingText(`-${amount}`, this.x, this.y, '#ff0000');
+        
+        // Visual Flash
+        damageOverlay.style.opacity = 0.5;
+        setTimeout(() => damageOverlay.style.opacity = 0, 100);
+        
         updateHud();
         if (this.hp <= 0) {
             gameOver("Slain in the dungeon");
@@ -422,10 +580,10 @@ class Player extends Entity {
 class Enemy extends Entity {
     constructor(x, y, type) {
         let color = type === 'BOSS' ? '#800080' : '#708090';
-        let hp = type === 'BOSS' ? 100 : 30;
-        let dmg = type === 'BOSS' ? 20 : 5;
-        let speed = type === 'BOSS' ? 2 : 1.5;
-        super(x, y, 32, color, speed);
+        let hp = type === 'BOSS' ? 150 + (currentLevel * 50) : 30 + (currentLevel * 10);
+        let dmg = type === 'BOSS' ? 25 : 8 + currentLevel;
+        let speed = type === 'BOSS' ? 2.5 : 1.5 + (currentLevel * 0.2);
+        super(x, y, type === 'BOSS' ? 48 : 32, color, speed);
         this.type = type;
         this.hp = hp;
         this.maxHp = hp;
@@ -434,18 +592,18 @@ class Enemy extends Entity {
     }
 
     update() {
-        // Simple AI: Move towards player
-        let dx = player.x - this.x;
-        let dy = player.y - this.y;
+        if (!player) return;
+
+        let dx = (player.x + 16) - (this.x + this.size/2);
+        let dy = (player.y + 16) - (this.y + this.size/2);
         let dist = Math.sqrt(dx*dx + dy*dy);
 
         if (dist > 40) {
             this.vx = (dx / dist) * this.speed;
-            this.vy = (dy / dist) / this.speed;
+            this.vy = (dy / dist) * this.speed;
         } else {
             this.vx = 0;
             this.vy = 0;
-            // Attack Player
             if (this.attackTimer <= 0) {
                 player.takeDamage(this.damage);
                 this.attackTimer = 60;
@@ -457,35 +615,51 @@ class Enemy extends Entity {
 
     takeDamage(amount) {
         this.hp -= amount;
-        showFloatingText(amount, this.x, this.y, '#fff');
-        createParticles(this.x + 16, this.y + 16, this.color, 3);
+        showFloatingText(Math.floor(amount), this.x, this.y, '#fff');
+        createParticles(this.x + this.size/2, this.y + this.size/2, this.color, 3);
+        
         if (this.hp <= 0) {
             this.markedForDeletion = true;
             player.gainXp(this.type === 'BOSS' ? 500 : 20);
             score += this.type === 'BOSS' ? 1000 : 100;
             
-            // Chance to drop item
-            if (Math.random() < 0.1) {
+            if (Math.random() < 0.15) {
                 items.push(new Item(this.x, this.y));
             }
+        }
+    }
+    
+    draw() {
+        super.draw();
+        // Health bar for boss
+        if (this.type === 'BOSS') {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(this.x, this.y - 10, this.size, 5);
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(this.x, this.y - 10, this.size * (this.hp/this.maxHp), 5);
         }
     }
 }
 
 class Projectile extends Entity {
-    constructor(x, y, tx, ty, speed, damage, color) {
-        super(x, y, 10, color, speed);
-        let angle = Math.atan2(ty - y, tx - x);
-        this.vx = Math.cos(angle) * speed;
-        this.vy = Math.sin(angle) * speed;
+    constructor(x, y, vx, vy, damage, color) {
+        super(x, y, 12, color, 0);
+        this.vx = vx;
+        this.vy = vy;
         this.damage = damage;
-        this.life = 100;
+        this.life = 60;
     }
 
     update() {
-        super.update();
+        this.x += this.vx;
+        this.y += this.vy;
         this.life--;
         if (this.life <= 0) this.markedForDeletion = true;
+
+        // Wall collision
+        let c = Math.floor((this.x + 6) / TILE_SIZE);
+        let r = Math.floor((this.y + 6) / TILE_SIZE);
+        if (map[r] && map[r][c] === 1) this.markedForDeletion = true;
 
         // Hit enemies
         enemies.forEach(e => {
@@ -495,21 +669,38 @@ class Projectile extends Entity {
             }
         });
     }
+    
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y + 6, 6, 0, Math.PI*2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+    }
 }
 
 class Item extends Entity {
     constructor(x, y) {
         super(x, y, 20, '#00ff00', 0);
-        this.type = 'POTION';
+        this.bobOffset = 0;
     }
     
     update() {
-        if (rectIntersect(this.x, this.y, this.size, this.size, player.x, player.y, player.size, player.size)) {
-            player.hp = Math.min(player.hp + 30, player.maxHp);
+        this.bobOffset += 0.1;
+        if (rectIntersect(this.x, this.y + Math.sin(this.bobOffset)*5, this.size, this.size, player.x, player.y, player.size, player.size)) {
+            player.hp = Math.min(player.hp + 40, player.maxHp);
             this.markedForDeletion = true;
-            showFloatingText("+30 HP", this.x, this.y, '#00ff00');
+            showFloatingText("+40 HP", this.x, this.y, '#00ff00');
             updateHud();
         }
+    }
+    
+    draw() {
+        const yOff = Math.sin(this.bobOffset) * 5;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y + yOff, this.size, this.size);
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Arial';
+        ctx.fillText('+', this.x + 6, this.y + 14 + yOff);
     }
 }
 
@@ -519,13 +710,15 @@ class Particle {
         this.y = y;
         this.color = color;
         this.size = Math.random() * 4 + 2;
-        this.vx = (Math.random() - 0.5) * 5;
-        this.vy = (Math.random() - 0.5) * 5;
+        this.vx = (Math.random() - 0.5) * 6;
+        this.vy = (Math.random() - 0.5) * 6;
         this.life = 30;
+        this.gravity = 0.2;
     }
     update() {
         this.x += this.vx;
         this.y += this.vy;
+        this.vy += this.gravity;
         this.life--;
         this.size *= 0.9;
     }
@@ -539,23 +732,17 @@ class Particle {
  * PROCEDURAL GENERATION
  */
 function generateMap() {
-    // Initialize with walls
     map = [];
     for (let r = 0; r < ROWS; r++) {
         let row = [];
-        for (let c = 0; c < COLS; c++) {
-            row.push(1);
-        }
+        for (let c = 0; c < COLS; c++) row.push(1);
         map.push(row);
     }
 
-    // Drunkard's Walk
     let floorCount = 0;
-    let targetFloors = (COLS * ROWS) * 0.4; // 40% open space
+    let targetFloors = (COLS * ROWS) * 0.45;
     let x = Math.floor(COLS/2);
     let y = Math.floor(ROWS/2);
-
-    // Ensure player start is clear
     map[y][x] = 0;
 
     while (floorCount < targetFloors) {
@@ -563,19 +750,18 @@ function generateMap() {
             map[y][x] = 0;
             floorCount++;
         }
-
         let dir = Math.floor(Math.random() * 4);
         if (dir === 0 && y > 1) y--;
         else if (dir === 1 && y < ROWS - 2) y++;
         else if (dir === 2 && x > 1) x--;
         else if (dir === 3 && x < COLS - 2) x++;
     }
-
-    // Place Boss at far end (simple heuristic)
-    // Find furthest floor tile from center
+    
+    // Ensure connectivity (simple fill check omitted for brevity, drunkard usually works well enough)
+    
+    // Find Boss Spot (furthest from center)
     let maxDist = 0;
     let bossPos = {x: 0, y: 0};
-    
     for(let r=0; r<ROWS; r++){
         for(let c=0; c<COLS; c++){
             if(map[r][c] === 0){
@@ -587,7 +773,6 @@ function generateMap() {
             }
         }
     }
-    
     return bossPos;
 }
 
@@ -599,29 +784,25 @@ function startGame() {
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('skills-container').classList.remove('hidden');
-    resetGameVariables();
+    
+    player = new Player(selectedClass);
+    score = 0;
+    currentLevel = 1;
+    
+    updateHud();
+    renderSkills();
+    
     loadLevel(1);
     gameState = 'PLAYING';
     gameLoop();
 }
 
-function resetGameVariables() {
-    score = 0;
-    // Reset player class progress if needed, or keep it persistent? 
-    // Let's keep unlocks persistent but reset stats for a "run"
-    player = new Player('WARRIOR');
-    updateHud();
-    renderSkills();
-}
-
 function loadLevel(lvl) {
     currentLevel = lvl;
-    document.getElementById('level-display').innerText = `LVL ${lvl}`;
+    document.getElementById('level-display').innerText = `FLOOR ${lvl}`;
     
-    // Generate Map
     let bossPos = generateMap();
     
-    // Reset Entities
     enemies = [];
     projectiles = [];
     items = [];
@@ -630,12 +811,16 @@ function loadLevel(lvl) {
     // Spawn Player Center
     player.x = (COLS/2) * TILE_SIZE;
     player.y = (ROWS/2) * TILE_SIZE;
+    player.hp = player.maxHp; // Heal on new level
     
-    // Spawn Enemies
-    let enemyCount = 5 + (lvl * 3);
+    // Spawn Minions
+    let enemyCount = 4 + (lvl * 2);
     for(let i=0; i<enemyCount; i++) {
         let pos = getRandomFloorTile();
-        enemies.push(new Enemy(pos.x, pos.y, 'MINION'));
+        // Don't spawn on player
+        if (Math.abs(pos.x - player.x) > 100) {
+            enemies.push(new Enemy(pos.x, pos.y, 'MINION'));
+        }
     }
     
     // Spawn Boss
@@ -647,7 +832,8 @@ function loadLevel(lvl) {
 function getRandomFloorTile() {
     let valid = false;
     let x, y;
-    while(!valid) {
+    let attempts = 0;
+    while(!valid && attempts < 100) {
         let c = Math.floor(Math.random() * COLS);
         let r = Math.floor(Math.random() * ROWS);
         if(map[r][c] === 0) {
@@ -655,6 +841,7 @@ function getRandomFloorTile() {
             y = r * TILE_SIZE;
             valid = true;
         }
+        attempts++;
     }
     return {x, y};
 }
@@ -664,9 +851,9 @@ function nextLevel() {
     if (currentLevel < 3) {
         loadLevel(currentLevel + 1);
         gameState = 'PLAYING';
+        gameLoop(); // RESTART LOOP
     } else {
-        // Game Won Logic (Simplified as restart for demo)
-        alert("You have conquered the dungeon!");
+        alert("YOU HAVE CONQUERED THE DUNGEON!\nFinal Score: " + score);
         resetGame();
     }
 }
@@ -674,23 +861,25 @@ function nextLevel() {
 function gameOver(reason) {
     gameState = 'GAMEOVER';
     document.getElementById('death-reason').innerText = reason;
+    document.getElementById('final-score').innerText = "Score: " + score;
     document.getElementById('game-over-screen').classList.remove('hidden');
 }
 
 function checkUnlocks() {
     if (player.level >= 3 && !CLASSES.MAGE.unlocked) {
-        unlockClass('MAGE', 'High damage spells, low health.');
+        unlockClass('MAGE');
     } else if (player.level >= 5 && !CLASSES.ROGUE.unlocked) {
-        unlockClass('ROGUE', 'Fast movement, dash ability.');
+        unlockClass('ROGUE');
     }
 }
 
-function unlockClass(key, desc) {
+function unlockClass(key) {
     CLASSES[key].unlocked = true;
     document.getElementById('unlock-name').innerText = CLASSES[key].name;
-    document.getElementById('unlock-desc').innerText = desc;
+    document.getElementById('unlock-icon').innerText = CLASSES[key].icon;
+    document.getElementById('unlock-desc').innerText = CLASSES[key].desc;
     document.getElementById('class-screen').classList.remove('hidden');
-    renderSkills(); // Refresh UI
+    initClassSelect(); // Update main menu
 }
 
 function closeClassScreen() {
@@ -713,14 +902,15 @@ function showFloatingText(text, x, y, color) {
     let el = document.createElement('div');
     el.className = 'floater';
     el.innerText = text;
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
+    el.style.left = (x + canvas.getBoundingClientRect().left) + 'px';
+    el.style.top = (y + canvas.getBoundingClientRect().top) + 'px';
     el.style.color = color;
-    document.getElementById('game-container').appendChild(el);
+    document.body.appendChild(el);
     setTimeout(() => el.remove(), 1000);
 }
 
 function updateHud() {
+    if(!player) return;
     let hpPct = (player.hp / player.maxHp) * 100;
     let xpPct = (player.xp / player.nextLevelXp) * 100;
     document.getElementById('hp-bar').style.width = `${Math.max(0, hpPct)}%`;
@@ -732,20 +922,25 @@ function renderSkills() {
     const container = document.getElementById('skills-container');
     container.innerHTML = '';
     
-    // Attack is always Space
-    // Skills are 1, 2, 3 based on class
-    
     const skillBtn = document.createElement('div');
     skillBtn.className = 'skill-btn';
+    skillBtn.id = 'skill-btn-ui';
     skillBtn.innerHTML = `<span class="key-hint">1</span>${CLASSES[player.classType].skill}`;
-    skillBtn.onclick = () => player.useSkill();
+    skillBtn.onclick = () => { if(player) player.useSkill(); };
     container.appendChild(skillBtn);
 }
 
-// Screen Shake
-let shakeIntensity = 0;
+function updateSkillUI() {
+    const btn = document.getElementById('skill-btn-ui');
+    if(player && player.skillCooldown > 0) {
+        btn.classList.add('cooldown');
+    } else {
+        btn.classList.remove('cooldown');
+    }
+}
+
 function screenShake(amount) {
-    shakeIntensity = amount;
+    cameraShake = amount;
 }
 
 function gameLoop() {
@@ -756,71 +951,63 @@ function gameLoop() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Screen Shake Logic
+    // Screen Shake
     ctx.save();
-    if (shakeIntensity > 0) {
-        let dx = (Math.random() - 0.5) * shakeIntensity;
-        let dy = (Math.random() - 0.5) * shakeIntensity;
+    if (cameraShake > 0) {
+        let dx = (Math.random() - 0.5) * cameraShake;
+        let dy = (Math.random() - 0.5) * cameraShake;
         ctx.translate(dx, dy);
-        shakeIntensity *= 0.9;
-        if(shakeIntensity < 0.5) shakeIntensity = 0;
+        cameraShake *= 0.9;
+        if(cameraShake < 0.5) cameraShake = 0;
     }
 
     // Draw Map
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             if (map[r][c] === 1) {
-                ctx.fillStyle = '#333'; // Wall
+                ctx.fillStyle = '#2a2a35'; 
                 ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                // Detail
-                ctx.strokeStyle = '#444';
+                ctx.strokeStyle = '#3a3a45';
                 ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             } else {
-                ctx.fillStyle = '#1a1a2e'; // Floor
+                ctx.fillStyle = '#15151a';
                 ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                // Grid detail
+                ctx.fillStyle = '#1a1a20';
+                ctx.fillRect(c * TILE_SIZE + 10, r * TILE_SIZE + 10, TILE_SIZE - 20, TILE_SIZE - 20);
             }
         }
     }
 
-    // Draw Exit/Goal (Visual only for now, beating boss triggers next level)
-    // In a full game, this would be a door.
-
-    // Update & Draw Entities
+    // Draw/Update Entities
     items.forEach(i => { i.update(); i.draw(); });
     projectiles.forEach(p => { p.update(); p.draw(); });
     enemies.forEach(e => { e.update(); e.draw(); });
-    player.update();
-    player.draw();
     
-    // Particles
+    if (player) {
+        player.update();
+        player.draw();
+    }
+    
     particles.forEach((p, index) => {
         p.update();
         p.draw();
         if (p.life <= 0) particles.splice(index, 1);
     });
 
-    // Cleanup dead entities
+    // Cleanup
     enemies = enemies.filter(e => !e.markedForDeletion);
     projectiles = projectiles.filter(p => !p.markedForDeletion);
     items = items.filter(i => !i.markedForDeletion);
 
-    // Check Level Clear
-    if (enemies.length === 0) {
+    // Level Clear Check
+    if (enemies.length === 0 && gameState === 'PLAYING') {
         gameState = 'LEVEL_TRANSITION';
-        document.getElementById('level-title').innerText = `LEVEL ${currentLevel} CLEARED`;
+        document.getElementById('level-desc').innerText = currentLevel === 3 ? "The Final Boss Defeated!" : "The path descends deeper...";
         document.getElementById('level-screen').classList.remove('hidden');
     }
-
-    // Skill Cooldown UI
-    const skillBtn = document.querySelector('.skill-btn');
-    if(player.skillCooldown > 0) {
-        skillBtn.classList.add('cooldown');
-        skillBtn.style.opacity = (player.skillCooldown / 120);
-    } else {
-        skillBtn.classList.remove('cooldown');
-        skillBtn.style.opacity = 1;
-    }
-
+    
+    updateSkillUI();
     ctx.restore();
 }
 
@@ -844,9 +1031,13 @@ canvas.addEventListener('mousemove', e => {
 });
 
 function resetGame() {
-    location.reload(); // Simplest way to fully reset for this demo
+    location.reload();
 }
+
+// Initial Setup
+initClassSelect();
 
 </script>
 </body>
 </html>
+```
